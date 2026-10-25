@@ -53,7 +53,7 @@ npm install
 npm run dev
 ```
 
-画面は `http://localhost:5173/` で開きます。現在はReactからDjangoへ接続できているかを表示する確認用画面です。
+画面は `http://localhost:5173/` で開きます。新規登録、ログイン、ログアウト、ゲスト利用の入口を確認できます。
 
 ## 動作確認
 

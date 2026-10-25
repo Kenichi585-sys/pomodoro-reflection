@@ -58,6 +58,7 @@ function App() {
   }
 
   async function handleLogout() {
+    setStartupError('')
     try {
       await logoutAccount()
       setUser(null)
@@ -73,16 +74,21 @@ function App() {
   }
 
   const timerVisible = screen === 'timer'
+  const authVisible = screen === 'login' || screen === 'register'
 
   return (
     <div className="app-shell">
       <header className="app-header">
-        {screen === 'welcome' || screen === 'loading' ? (
-          <span className="brand-label">振り返り付きポモドーロ</span>
-        ) : (
-          <button className="brand-button" type="button" onClick={() => setScreen('timer')}>
+        {authVisible ? (
+          <button
+            className="brand-button"
+            type="button"
+            onClick={() => setScreen('welcome')}
+          >
             振り返り付きポモドーロ
           </button>
+        ) : (
+          <span className="brand-label">振り返り付きポモドーロ</span>
         )}
 
         {timerVisible && (
@@ -153,7 +159,8 @@ function App() {
           <AuthForm
             key={screen}
             mode={screen}
-            onCancel={() => setScreen('timer')}
+            onCancel={() => setScreen('welcome')}
+            onSwitchMode={setScreen}
             onLogin={loginAccount}
             onRegister={registerAccount}
             onSuccess={handleAuthSuccess}
@@ -168,6 +175,11 @@ function App() {
             </div>
             <h1 id="timer-heading">認証機能の準備ができました</h1>
             <p>タイマー機能は次の実装段階で追加します。</p>
+            {startupError && (
+              <p className="form-error" role="alert">
+                {startupError}
+              </p>
+            )}
           </section>
         )}
       </main>

@@ -106,4 +106,86 @@ describe('App', () => {
       screen.getByText(/管理者が保存内容を確認することがあります/),
     ).toBeInTheDocument()
   })
+
+  it('ログイン画面と新規登録画面を相互に切り替えられる', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({ is_authenticated: false, user: null }),
+      ),
+    )
+
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: '新規登録' }))
+
+    expect(screen.getByRole('heading', { name: '新規登録' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'ログイン' }))
+    expect(screen.getByRole('heading', { name: 'ログイン' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '新規登録' }))
+    expect(screen.getByRole('heading', { name: '新規登録' })).toBeInTheDocument()
+  })
+
+  it('認証画面から最初の画面へ戻れる', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({ is_authenticated: false, user: null }),
+      ),
+    )
+
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'ログイン' }))
+    fireEvent.click(screen.getByRole('button', { name: '最初の画面へ戻る' }))
+
+    expect(
+      screen.getByRole('heading', { name: '学習時間と振り返りを保存できます' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: '認証機能の準備ができました' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('認証画面のアプリ名から最初の画面へ戻れる', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({ is_authenticated: false, user: null }),
+      ),
+    )
+
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: '新規登録' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: '振り返り付きポモドーロ' }),
+    )
+
+    expect(
+      screen.getByRole('heading', { name: '学習時間と振り返りを保存できます' }),
+    ).toBeInTheDocument()
+  })
+
+  it('ログアウト失敗をタイマー画面へ表示する', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          is_authenticated: true,
+          user: { email: 'User@example.com' },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }))
+      .mockResolvedValueOnce(
+        jsonResponse({ detail: 'ログアウト処理に失敗しました。' }, 500),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'アカウント' }))
+    fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'ログアウト処理に失敗しました。',
+    )
+    expect(screen.getByRole('button', { name: 'アカウント' })).toBeInTheDocument()
+  })
 })

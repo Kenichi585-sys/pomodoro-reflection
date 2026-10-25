@@ -7,6 +7,7 @@ export type AuthFormMode = 'login' | 'register'
 type AuthFormProps = {
   mode: AuthFormMode
   onCancel: () => void
+  onSwitchMode: (mode: AuthFormMode) => void
   onLogin: (input: { email: string; password: string }) => Promise<AuthUser>
   onRegister: (input: {
     email: string
@@ -23,6 +24,7 @@ function firstError(errors: Record<string, string[]>, field: string) {
 export function AuthForm({
   mode,
   onCancel,
+  onSwitchMode,
   onLogin,
   onRegister,
   onSuccess,
@@ -146,8 +148,22 @@ export function AuthForm({
               : 'ログイン'}
         </button>
         <button className="text-button" type="button" onClick={onCancel}>
-          タイマーへ戻る
+          最初の画面へ戻る
         </button>
+        <div className="auth-switch">
+          <span>
+            {isRegister
+              ? 'アカウントをお持ちの方'
+              : 'アカウントをお持ちでない方'}
+          </span>
+          <button
+            className="text-button"
+            type="button"
+            onClick={() => onSwitchMode(isRegister ? 'login' : 'register')}
+          >
+            {isRegister ? 'ログイン' : '新規登録'}
+          </button>
+        </div>
       </form>
     </section>
   )

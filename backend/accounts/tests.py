@@ -155,6 +155,11 @@ class AuthenticationApiTests(TestCase):
         session_response = self.client.get("/api/auth/me/")
         self.assertFalse(session_response.json()["is_authenticated"])
 
+    def test_logout_succeeds_when_session_has_already_ended(self):
+        response = self.post_with_csrf("/api/auth/logout/", {})
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+
     def test_me_returns_guest_state_without_login(self):
         response = self.client.get("/api/auth/me/")
 
@@ -175,8 +180,9 @@ class AuthenticationApiTests(TestCase):
                 },
                 format="json",
                 HTTP_X_CSRFTOKEN=csrf_token,
+                HTTP_X_FORWARDED_FOR=f"203.0.113.{attempt}",
             )
-            for _ in range(11)
+            for attempt in range(1, 12)
         ]
 
         self.assertEqual(responses[0].status_code, status.HTTP_400_BAD_REQUEST)

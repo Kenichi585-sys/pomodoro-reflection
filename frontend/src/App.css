@@ -203,6 +203,21 @@
   margin-top: 24px;
 }
 
+.auth-switch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 20px;
+  color: #bdbdbd;
+  font-size: 0.9rem;
+}
+
+.auth-switch .text-button {
+  min-height: auto;
+  padding: 4px;
+}
+
 .field-error,
 .form-error {
   margin: 8px 0 0;

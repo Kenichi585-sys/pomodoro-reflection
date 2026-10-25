@@ -163,6 +163,9 @@ REST_FRAMEWORK = {
         'auth_login': '10/minute',
         'auth_register': '5/hour',
     },
+    # 初期状態では利用者が変更できるX-Forwarded-Forを信用しない。
+    # 本番で信頼するプロキシを追加する場合だけ、実際の構成に合わせて変更する。
+    'NUM_PROXIES': int(os.getenv('DJANGO_NUM_PROXIES', '0')),
 }
 
 SESSION_COOKIE_HTTPONLY = True

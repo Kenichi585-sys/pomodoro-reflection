@@ -1,2 +1,1 @@
-# pomodoro-reflection
-a
+# ポモドーロ学習記録アプリ

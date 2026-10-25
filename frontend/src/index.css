@@ -19,3 +19,16 @@
 body {
   margin: 0;
 }
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #9ed8eb;
+  outline-offset: 3px;
+}

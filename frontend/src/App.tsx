@@ -1,48 +1,177 @@
 import { useEffect, useState } from 'react'
+
+import {
+  AuthApiError,
+  getSession,
+  loginAccount,
+  logoutAccount,
+  registerAccount,
+  type AuthUser,
+} from './api/auth'
+import { AuthForm, type AuthFormMode } from './components/AuthForm'
 import './App.css'
 
-type ApiStatus = 'checking' | 'online' | 'offline'
+type Screen = 'loading' | 'welcome' | 'timer' | AuthFormMode
+
+const GUEST_CHOICE_KEY = 'pomodoro-reflection:guest-choice'
 
 function App() {
-  const [apiStatus, setApiStatus] = useState<ApiStatus>('checking')
+  const [screen, setScreen] = useState<Screen>('loading')
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [accountOpen, setAccountOpen] = useState(false)
+  const [startupError, setStartupError] = useState('')
 
   useEffect(() => {
-    const controller = new AbortController()
+    let active = true
 
-    fetch('/api/health/', { signal: controller.signal })
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error('API health check failed')
-        }
-        setApiStatus('online')
+    getSession()
+      .then((sessionUser) => {
+        if (!active) return
+        setUser(sessionUser)
+        const guestSelected = localStorage.getItem(GUEST_CHOICE_KEY) === 'true'
+        setScreen(sessionUser || guestSelected ? 'timer' : 'welcome')
       })
       .catch((error: unknown) => {
-        if (error instanceof DOMException && error.name === 'AbortError') {
-          return
-        }
-        setApiStatus('offline')
+        if (!active) return
+        setStartupError(
+          error instanceof AuthApiError
+            ? error.message
+            : 'ログイン状態を確認できませんでした。',
+        )
+        setScreen('welcome')
       })
 
-    return () => controller.abort()
+    return () => {
+      active = false
+    }
   }, [])
 
-  const statusText = {
-    checking: '接続を確認しています',
-    online: 'Django APIに接続できました',
-    offline: 'Django APIを起動すると接続状態を確認できます',
-  }[apiStatus]
+  function showTimerAsGuest() {
+    localStorage.setItem(GUEST_CHOICE_KEY, 'true')
+    setScreen('timer')
+  }
+
+  function handleAuthSuccess(authenticatedUser: AuthUser) {
+    localStorage.removeItem(GUEST_CHOICE_KEY)
+    setUser(authenticatedUser)
+    setScreen('timer')
+  }
+
+  async function handleLogout() {
+    try {
+      await logoutAccount()
+      setUser(null)
+      setAccountOpen(false)
+      setScreen('welcome')
+    } catch (error) {
+      setStartupError(
+        error instanceof AuthApiError
+          ? error.message
+          : 'ログアウトできませんでした。',
+      )
+    }
+  }
+
+  const timerVisible = screen === 'timer'
 
   return (
-    <main className="setup-page">
-      <section className="setup-card">
-        <p className="eyebrow">開発環境</p>
-        <h1>振り返り付きポモドーロ</h1>
-        <p>ReactとDjangoの骨組みを確認するための一時画面です。</p>
-        <p className={`api-status api-status--${apiStatus}`} role="status">
-          {statusText}
-        </p>
-      </section>
-    </main>
+    <div className="app-shell">
+      <header className="app-header">
+        {screen === 'welcome' || screen === 'loading' ? (
+          <span className="brand-label">振り返り付きポモドーロ</span>
+        ) : (
+          <button className="brand-button" type="button" onClick={() => setScreen('timer')}>
+            振り返り付きポモドーロ
+          </button>
+        )}
+
+        {timerVisible && (
+          <nav aria-label="主要メニュー">
+            {user ? (
+              <div className="account-area">
+                <button
+                  className="header-button"
+                  type="button"
+                  aria-expanded={accountOpen}
+                  onClick={() => setAccountOpen((open) => !open)}
+                >
+                  アカウント
+                </button>
+                {accountOpen && (
+                  <div className="account-menu">
+                    <p>{user.email}</p>
+                    <button type="button" onClick={handleLogout}>
+                      ログアウト
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <>
+                <button className="header-button" type="button" onClick={() => setScreen('login')}>
+                  ログイン
+                </button>
+                <button className="header-button" type="button" onClick={() => setScreen('register')}>
+                  新規登録
+                </button>
+              </>
+            )}
+          </nav>
+        )}
+      </header>
+
+      <main className="main-content">
+        {screen === 'loading' && <p role="status">ログイン状態を確認しています</p>}
+
+        {screen === 'welcome' && (
+          <section className="welcome-card" aria-labelledby="welcome-title">
+            <p className="eyebrow">学習の記録</p>
+            <h1 id="welcome-title">学習時間と振り返りを保存できます</h1>
+            <p>
+              ログインすると、学習時間の集計と学習後の振り返りを利用できます。
+            </p>
+            {startupError && (
+              <p className="form-error" role="alert">
+                {startupError}
+              </p>
+            )}
+            <div className="welcome-actions">
+              <button className="primary-button" type="button" onClick={() => setScreen('login')}>
+                ログイン
+              </button>
+              <button className="secondary-button" type="button" onClick={() => setScreen('register')}>
+                新規登録
+              </button>
+              <button className="text-button" type="button" onClick={showTimerAsGuest}>
+                ログインせずタイマーを使う
+              </button>
+            </div>
+          </section>
+        )}
+
+        {(screen === 'login' || screen === 'register') && (
+          <AuthForm
+            key={screen}
+            mode={screen}
+            onCancel={() => setScreen('timer')}
+            onLogin={loginAccount}
+            onRegister={registerAccount}
+            onSuccess={handleAuthSuccess}
+          />
+        )}
+
+        {timerVisible && (
+          <section className="timer-stage" aria-labelledby="timer-heading">
+            <p className="eyebrow">25分 / 5分</p>
+            <div className="timer-placeholder" aria-hidden="true">
+              <span>25:00</span>
+            </div>
+            <h1 id="timer-heading">認証機能の準備ができました</h1>
+            <p>タイマー機能は次の実装段階で追加します。</p>
+          </section>
+        )}
+      </main>
+    </div>
   )
 }
 

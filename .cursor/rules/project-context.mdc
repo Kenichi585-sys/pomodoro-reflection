@@ -1,0 +1,12 @@
+---
+description: Pomodoro reflection app project guidance
+alwaysApply: true
+---
+
+# Project context
+
+- 最初に `AGENTS.md`、`docs/REQUIREMENTS.md`、`docs/DESIGN.md` を読む。
+- 確定要件と初期版の対象外項目を守る。
+- 仕様変更を伴う実装は、変更理由と影響を利用者に説明してから行う。
+- 実装やエラーの説明は、利用者が面接で説明できる具体性を保つ。
+

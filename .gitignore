@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Secrets and local environment variables
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.sqlite3
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Node.js
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Logs
+*.log
+

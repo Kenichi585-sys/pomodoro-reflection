@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
 
-function jsonResponse(body: object, status = 200) {
+const jsonResponse = (body: object, status = 200) => {
   return {
     ok: status >= 200 && status < 300,
     status,

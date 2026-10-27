@@ -5,6 +5,16 @@ from rest_framework import serializers
 
 User = get_user_model()
 
+EMAIL_ERROR_MESSAGES = {
+    "required": "メールアドレスを入力してください。",
+    "blank": "メールアドレスを入力してください。",
+    "invalid": "正しい形式のメールアドレスを入力してください。",
+}
+PASSWORD_ERROR_MESSAGES = {
+    "required": "パスワードを入力してください。",
+    "blank": "パスワードを入力してください。",
+}
+
 
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -13,11 +23,16 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField(trim_whitespace=False, write_only=True)
+    email = serializers.EmailField(error_messages=EMAIL_ERROR_MESSAGES)
+    password = serializers.CharField(
+        trim_whitespace=False,
+        write_only=True,
+        error_messages=PASSWORD_ERROR_MESSAGES,
+    )
     password_confirmation = serializers.CharField(
         trim_whitespace=False,
         write_only=True,
+        error_messages=PASSWORD_ERROR_MESSAGES,
     )
 
     def validate_email(self, value):
@@ -53,5 +68,9 @@ class RegisterSerializer(serializers.Serializer):
 
 
 class LoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField(trim_whitespace=False, write_only=True)
+    email = serializers.EmailField(error_messages=EMAIL_ERROR_MESSAGES)
+    password = serializers.CharField(
+        trim_whitespace=False,
+        write_only=True,
+        error_messages=PASSWORD_ERROR_MESSAGES,
+    )

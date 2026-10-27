@@ -509,7 +509,7 @@
   line-height: 1.5;
 }
 
-@media (orientation: portrait), (max-width: 560px) {
+@media (max-width: 615px) {
   .main-content:has(.timer-stage) {
     padding: 12px 18px;
   }
@@ -547,28 +547,49 @@
 
 @media (max-width: 620px) {
   .app-header {
-    min-height: 56px;
+    min-height: 64px;
     align-items: center;
     gap: 8px;
-    padding: 10px 14px;
+    padding: 12px 16px;
   }
 
   .brand-button,
   .brand-label {
     flex: 0 0 auto;
     white-space: nowrap;
-    font-size: 0.78rem;
+    font-size: 0.92rem;
   }
 
   .app-header nav {
     flex-wrap: nowrap;
     justify-content: flex-end;
-    gap: 2px;
+    gap: 4px;
   }
 
   .header-button {
-    padding: 7px 6px;
-    font-size: 0.78rem;
+    padding: 8px 10px;
+    font-size: 0.88rem;
+  }
+
+  .main-content {
+    min-height: calc(100vh - 65px);
+  }
+}
+
+@media (max-width: 420px) {
+  .app-header {
+    min-height: 56px;
+    padding: 10px 12px;
+  }
+
+  .brand-button,
+  .brand-label,
+  .header-button {
+    font-size: 0.76rem;
+  }
+
+  .header-button {
+    padding: 7px 5px;
   }
 
   .main-content {

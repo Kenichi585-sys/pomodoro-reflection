@@ -24,3 +24,7 @@ coverage/
 # Logs
 *.log
 
+# Local AI guidance
+.cursor/rules/local-*.mdc
+.cursor/notes/
+

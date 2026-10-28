@@ -9,16 +9,18 @@ import {
   type AuthUser,
 } from './api/auth'
 import { AuthForm, type AuthFormMode } from './components/AuthForm'
+import { TimerPanel } from './components/TimerPanel'
 import './App.css'
 
 type Screen = 'loading' | 'welcome' | 'timer' | AuthFormMode
 
 const GUEST_CHOICE_KEY = 'pomodoro-reflection:guest-choice'
 
-function App() {
+const App = () => {
   const [screen, setScreen] = useState<Screen>('loading')
   const [user, setUser] = useState<AuthUser | null>(null)
   const [accountOpen, setAccountOpen] = useState(false)
+  const [timerLocked, setTimerLocked] = useState(false)
   const [startupError, setStartupError] = useState('')
 
   useEffect(() => {
@@ -46,18 +48,18 @@ function App() {
     }
   }, [])
 
-  function showTimerAsGuest() {
+  const showTimerAsGuest = () => {
     localStorage.setItem(GUEST_CHOICE_KEY, 'true')
     setScreen('timer')
   }
 
-  function handleAuthSuccess(authenticatedUser: AuthUser) {
+  const handleAuthSuccess = (authenticatedUser: AuthUser) => {
     localStorage.removeItem(GUEST_CHOICE_KEY)
     setUser(authenticatedUser)
     setScreen('timer')
   }
 
-  async function handleLogout() {
+  const handleLogout = async () => {
     setStartupError('')
     try {
       await logoutAccount()
@@ -99,6 +101,7 @@ function App() {
                   className="header-button"
                   type="button"
                   aria-expanded={accountOpen}
+                  disabled={timerLocked}
                   onClick={() => setAccountOpen((open) => !open)}
                 >
                   アカウント
@@ -106,7 +109,7 @@ function App() {
                 {accountOpen && (
                   <div className="account-menu">
                     <p>{user.email}</p>
-                    <button type="button" onClick={handleLogout}>
+                    <button type="button" disabled={timerLocked} onClick={handleLogout}>
                       ログアウト
                     </button>
                   </div>
@@ -114,10 +117,20 @@ function App() {
               </div>
             ) : (
               <>
-                <button className="header-button" type="button" onClick={() => setScreen('login')}>
+                <button
+                  className="header-button"
+                  type="button"
+                  disabled={timerLocked}
+                  onClick={() => setScreen('login')}
+                >
                   ログイン
                 </button>
-                <button className="header-button" type="button" onClick={() => setScreen('register')}>
+                <button
+                  className="header-button"
+                  type="button"
+                  disabled={timerLocked}
+                  onClick={() => setScreen('register')}
+                >
                   新規登録
                 </button>
               </>
@@ -168,19 +181,17 @@ function App() {
         )}
 
         {timerVisible && (
-          <section className="timer-stage" aria-labelledby="timer-heading">
-            <p className="eyebrow">25分 / 5分</p>
-            <div className="timer-placeholder" aria-hidden="true">
-              <span>25:00</span>
-            </div>
-            <h1 id="timer-heading">認証機能の準備ができました</h1>
-            <p>タイマー機能は次の実装段階で追加します。</p>
+          <>
+            <TimerPanel
+              showStudyTime={user !== null}
+              onTimerLockChange={setTimerLocked}
+            />
             {startupError && (
               <p className="form-error" role="alert">
                 {startupError}
               </p>
             )}
-          </section>
+          </>
         )}
       </main>
     </div>

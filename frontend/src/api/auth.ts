@@ -26,7 +26,7 @@ export class AuthApiError extends Error {
   }
 }
 
-async function readJson<T>(response: Response): Promise<T | null> {
+const readJson = async <T>(response: Response): Promise<T | null> => {
   try {
     return (await response.json()) as T
   } catch {
@@ -34,7 +34,7 @@ async function readJson<T>(response: Response): Promise<T | null> {
   }
 }
 
-async function request<T>(url: string, init?: RequestInit): Promise<T> {
+const request = async <T>(url: string, init?: RequestInit): Promise<T> => {
   let response: Response
 
   try {
@@ -71,12 +71,12 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return body as T
 }
 
-async function csrfToken(): Promise<string> {
+const csrfToken = async (): Promise<string> => {
   const response = await request<{ csrf_token: string }>('/api/auth/csrf/')
   return response.csrf_token
 }
 
-async function post<T>(url: string, body: object): Promise<T> {
+const post = async <T>(url: string, body: object): Promise<T> => {
   const token = await csrfToken()
   return request<T>(url, {
     method: 'POST',
@@ -88,16 +88,16 @@ async function post<T>(url: string, body: object): Promise<T> {
   })
 }
 
-export async function getSession(): Promise<AuthUser | null> {
+export const getSession = async (): Promise<AuthUser | null> => {
   const response = await request<SessionResponse>('/api/auth/me/')
   return response.is_authenticated ? response.user : null
 }
 
-export async function registerAccount(input: {
+export const registerAccount = async (input: {
   email: string
   password: string
   passwordConfirmation: string
-}): Promise<AuthUser> {
+}): Promise<AuthUser> => {
   const response = await post<UserResponse>('/api/auth/register/', {
     email: input.email,
     password: input.password,
@@ -106,14 +106,14 @@ export async function registerAccount(input: {
   return response.user
 }
 
-export async function loginAccount(input: {
+export const loginAccount = async (input: {
   email: string
   password: string
-}): Promise<AuthUser> {
+}): Promise<AuthUser> => {
   const response = await post<UserResponse>('/api/auth/login/', input)
   return response.user
 }
 
-export async function logoutAccount(): Promise<void> {
+export const logoutAccount = async (): Promise<void> => {
   await post<void>('/api/auth/logout/', {})
 }

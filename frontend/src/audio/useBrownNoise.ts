@@ -18,7 +18,7 @@ export const useBrownNoise = (): BrownNoiseController => {
   const gainRef = useRef<GainNode | null>(null)
   const highPassRef = useRef<BiquadFilterNode | null>(null)
   const lowPassRef = useRef<BiquadFilterNode | null>(null)
-  const lowShelfRef = useRef<BiquadFilterNode | null>(null)
+  const bodyFilterRef = useRef<BiquadFilterNode | null>(null)
   const limiterRef = useRef<DynamicsCompressorNode | null>(null)
   const bufferRef = useRef<AudioBuffer | null>(null)
   const sourceRef = useRef<AudioBufferSourceNode | null>(null)
@@ -62,18 +62,19 @@ export const useBrownNoise = (): BrownNoiseController => {
         if (!gainRef.current) {
           const highPass = context.createBiquadFilter()
           highPass.type = 'highpass'
-          highPass.frequency.value = 18
-          highPass.Q.value = 0.2
+          highPass.frequency.value = 32
+          highPass.Q.value = 0.45
 
           const lowPass = context.createBiquadFilter()
           lowPass.type = 'lowpass'
-          lowPass.frequency.value = 850
-          lowPass.Q.value = 0.3
+          lowPass.frequency.value = 360
+          lowPass.Q.value = 0.45
 
-          const lowShelf = context.createBiquadFilter()
-          lowShelf.type = 'lowshelf'
-          lowShelf.frequency.value = 95
-          lowShelf.gain.value = 6
+          const bodyFilter = context.createBiquadFilter()
+          bodyFilter.type = 'peaking'
+          bodyFilter.frequency.value = 110
+          bodyFilter.Q.value = 0.55
+          bodyFilter.gain.value = 3
 
           const limiter = context.createDynamicsCompressor()
           limiter.threshold.value = -3
@@ -83,13 +84,13 @@ export const useBrownNoise = (): BrownNoiseController => {
           limiter.release.value = 0.15
 
           highPass.connect(lowPass)
-          lowPass.connect(lowShelf)
-          lowShelf.connect(gain)
+          lowPass.connect(bodyFilter)
+          bodyFilter.connect(gain)
           gain.connect(limiter)
           limiter.connect(context.destination)
           highPassRef.current = highPass
           lowPassRef.current = lowPass
-          lowShelfRef.current = lowShelf
+          bodyFilterRef.current = bodyFilter
           limiterRef.current = limiter
           gainRef.current = gain
         }
@@ -100,15 +101,18 @@ export const useBrownNoise = (): BrownNoiseController => {
         let buffer = bufferRef.current
         if (!buffer) {
           const frameCount = context.sampleRate * 30
-          buffer = context.createBuffer(1, frameCount, context.sampleRate)
-          const samples = buffer.getChannelData(0)
-          let previousSample = 0
+          buffer = context.createBuffer(2, frameCount, context.sampleRate)
 
-          for (let index = 0; index < frameCount; index += 1) {
-            const whiteNoise = Math.random() * 2 - 1
-            const brownNoise = (previousSample + 0.02 * whiteNoise) / 1.02
-            previousSample = brownNoise
-            samples[index] = brownNoise * 3.2
+          for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+            const samples = buffer.getChannelData(channel)
+            let previousSample = 0
+
+            for (let index = 0; index < frameCount; index += 1) {
+              const whiteNoise = Math.random() * 2 - 1
+              const brownNoise = (previousSample + 0.02 * whiteNoise) / 1.02
+              previousSample = brownNoise
+              samples[index] = brownNoise * 3.2
+            }
           }
 
           bufferRef.current = buffer
@@ -139,7 +143,7 @@ export const useBrownNoise = (): BrownNoiseController => {
       gainRef.current = null
       highPassRef.current = null
       lowPassRef.current = null
-      lowShelfRef.current = null
+      bodyFilterRef.current = null
       limiterRef.current = null
       bufferRef.current = null
       if (context) void context.close()

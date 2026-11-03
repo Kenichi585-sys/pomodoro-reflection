@@ -19,22 +19,22 @@ const GUEST_CHOICE_KEY = 'pomodoro-reflection:guest-choice'
 const App = () => {
   const [screen, setScreen] = useState<Screen>('loading')
   const [user, setUser] = useState<AuthUser | null>(null)
-  const [accountOpen, setAccountOpen] = useState(false)
-  const [timerLocked, setTimerLocked] = useState(false)
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
+  const [isTimerNavigationLocked, setIsTimerNavigationLocked] = useState(false)
   const [startupError, setStartupError] = useState('')
 
   useEffect(() => {
-    let active = true
+    let isSessionRequestActive = true
 
     getSession()
       .then((sessionUser) => {
-        if (!active) return
+        if (!isSessionRequestActive) return
         setUser(sessionUser)
-        const guestSelected = localStorage.getItem(GUEST_CHOICE_KEY) === 'true'
-        setScreen(sessionUser || guestSelected ? 'timer' : 'welcome')
+        const isGuestModeSelected = localStorage.getItem(GUEST_CHOICE_KEY) === 'true'
+        setScreen(sessionUser || isGuestModeSelected ? 'timer' : 'welcome')
       })
       .catch((error: unknown) => {
-        if (!active) return
+        if (!isSessionRequestActive) return
         setStartupError(
           error instanceof AuthApiError
             ? error.message
@@ -44,7 +44,7 @@ const App = () => {
       })
 
     return () => {
-      active = false
+      isSessionRequestActive = false
     }
   }, [])
 
@@ -64,7 +64,7 @@ const App = () => {
     try {
       await logoutAccount()
       setUser(null)
-      setAccountOpen(false)
+      setIsAccountMenuOpen(false)
       setScreen('welcome')
     } catch (error) {
       setStartupError(
@@ -75,13 +75,13 @@ const App = () => {
     }
   }
 
-  const timerVisible = screen === 'timer'
-  const authVisible = screen === 'login' || screen === 'register'
+  const isTimerVisible = screen === 'timer'
+  const isAuthVisible = screen === 'login' || screen === 'register'
 
   return (
     <div className="app-shell">
       <header className="app-header">
-        {authVisible ? (
+        {isAuthVisible ? (
           <button
             className="brand-button"
             type="button"
@@ -93,23 +93,27 @@ const App = () => {
           <span className="brand-label">振り返り付きポモドーロ</span>
         )}
 
-        {timerVisible && (
+        {isTimerVisible && (
           <nav aria-label="主要メニュー">
             {user ? (
               <div className="account-area">
                 <button
                   className="header-button"
                   type="button"
-                  aria-expanded={accountOpen}
-                  disabled={timerLocked}
-                  onClick={() => setAccountOpen((open) => !open)}
+                  aria-expanded={isAccountMenuOpen}
+                  disabled={isTimerNavigationLocked}
+                  onClick={() => setIsAccountMenuOpen((isOpen) => !isOpen)}
                 >
                   アカウント
                 </button>
-                {accountOpen && (
+                {isAccountMenuOpen && (
                   <div className="account-menu">
                     <p>{user.email}</p>
-                    <button type="button" disabled={timerLocked} onClick={handleLogout}>
+                    <button
+                      type="button"
+                      disabled={isTimerNavigationLocked}
+                      onClick={handleLogout}
+                    >
                       ログアウト
                     </button>
                   </div>
@@ -120,7 +124,7 @@ const App = () => {
                 <button
                   className="header-button"
                   type="button"
-                  disabled={timerLocked}
+                  disabled={isTimerNavigationLocked}
                   onClick={() => setScreen('login')}
                 >
                   ログイン
@@ -128,7 +132,7 @@ const App = () => {
                 <button
                   className="header-button"
                   type="button"
-                  disabled={timerLocked}
+                  disabled={isTimerNavigationLocked}
                   onClick={() => setScreen('register')}
                 >
                   新規登録
@@ -180,11 +184,11 @@ const App = () => {
           />
         )}
 
-        {timerVisible && (
+        {isTimerVisible && (
           <>
             <TimerPanel
               showStudyTime={user !== null}
-              onTimerLockChange={setTimerLocked}
+              onTimerNavigationLockChange={setIsTimerNavigationLocked}
             />
             {startupError && (
               <p className="form-error" role="alert">

@@ -17,8 +17,8 @@ type AuthFormProps = {
   onSuccess: (user: AuthUser) => void;
 };
 
-const firstError = (errors: Record<string, string[]>, field: string) => {
-  return errors[field]?.[0];
+const getFirstFieldError = (errors: Record<string, string[]>, fieldName: string) => {
+  return errors[fieldName]?.[0];
 };
 
 export const AuthForm = ({
@@ -36,7 +36,7 @@ export const AuthForm = ({
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const isRegister = mode === "register";
+  const isRegistrationMode = mode === "register";
 
   const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -45,15 +45,15 @@ export const AuthForm = ({
     setIsSubmitting(true);
 
     try {
-      const user = isRegister
+      const authenticatedUser = isRegistrationMode
         ? await onRegister({ email, password, passwordConfirmation })
         : await onLogin({ email, password });
-      onSuccess(user);
+      onSuccess(authenticatedUser);
     } catch (error) {
       if (error instanceof AuthApiError) {
         setFieldErrors(error.fieldErrors);
         setFormError(
-          firstError(error.fieldErrors, "non_field_errors") ?? error.message,
+          getFirstFieldError(error.fieldErrors, "non_field_errors") ?? error.message,
         );
       } else {
         setFormError("予期しないエラーが発生しました。");
@@ -66,7 +66,7 @@ export const AuthForm = ({
   return (
     <section className="auth-card" aria-labelledby="auth-title">
       <p className="eyebrow">アカウント</p>
-      <h1 id="auth-title">{isRegister ? "新規登録" : "ログイン"}</h1>
+      <h1 id="auth-title">{isRegistrationMode ? "新規登録" : "ログイン"}</h1>
 
       <form onSubmit={handleSubmit} noValidate>
         <label htmlFor="email">メールアドレス</label>
@@ -78,13 +78,13 @@ export const AuthForm = ({
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           aria-describedby={
-            firstError(fieldErrors, "email") ? "email-error" : undefined
+            getFirstFieldError(fieldErrors, "email") ? "email-error" : undefined
           }
           required
         />
-        {firstError(fieldErrors, "email") && (
+        {getFirstFieldError(fieldErrors, "email") && (
           <p className="field-error" id="email-error">
-            {firstError(fieldErrors, "email")}
+            {getFirstFieldError(fieldErrors, "email")}
           </p>
         )}
 
@@ -93,21 +93,21 @@ export const AuthForm = ({
           id="password"
           name="password"
           type="password"
-          autoComplete={isRegister ? "new-password" : "current-password"}
+          autoComplete={isRegistrationMode ? "new-password" : "current-password"}
           value={password}
           onChange={(event) => setPassword(event.target.value)}
           aria-describedby={
-            firstError(fieldErrors, "password") ? "password-error" : undefined
+            getFirstFieldError(fieldErrors, "password") ? "password-error" : undefined
           }
           required
         />
-        {firstError(fieldErrors, "password") && (
+        {getFirstFieldError(fieldErrors, "password") && (
           <p className="field-error" id="password-error">
-            {firstError(fieldErrors, "password")}
+            {getFirstFieldError(fieldErrors, "password")}
           </p>
         )}
 
-        {isRegister && (
+        {isRegistrationMode && (
           <>
             <label htmlFor="password-confirmation">パスワード（確認）</label>
             <input
@@ -118,15 +118,15 @@ export const AuthForm = ({
               value={passwordConfirmation}
               onChange={(event) => setPasswordConfirmation(event.target.value)}
               aria-describedby={
-                firstError(fieldErrors, "password_confirmation")
+                getFirstFieldError(fieldErrors, "password_confirmation")
                   ? "password-confirmation-error"
                   : undefined
               }
               required
             />
-            {firstError(fieldErrors, "password_confirmation") && (
+            {getFirstFieldError(fieldErrors, "password_confirmation") && (
               <p className="field-error" id="password-confirmation-error">
-                {firstError(fieldErrors, "password_confirmation")}
+                {getFirstFieldError(fieldErrors, "password_confirmation")}
               </p>
             )}
 
@@ -149,7 +149,7 @@ export const AuthForm = ({
         >
           {isSubmitting
             ? "処理しています"
-            : isRegister
+            : isRegistrationMode
               ? "アカウントを作成"
               : "ログイン"}
         </button>
@@ -158,16 +158,16 @@ export const AuthForm = ({
         </button>
         <div className="auth-switch">
           <span>
-            {isRegister
+            {isRegistrationMode
               ? "アカウントをお持ちの方"
               : "アカウントをお持ちでない方"}
           </span>
           <button
             className="text-button"
             type="button"
-            onClick={() => onSwitchMode(isRegister ? "login" : "register")}
+            onClick={() => onSwitchMode(isRegistrationMode ? "login" : "register")}
           >
-            {isRegister ? "ログイン" : "新規登録"}
+            {isRegistrationMode ? "ログイン" : "新規登録"}
           </button>
         </div>
       </form>

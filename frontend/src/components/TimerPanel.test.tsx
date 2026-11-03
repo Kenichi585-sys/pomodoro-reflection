@@ -30,7 +30,7 @@ describe('TimerPanel', () => {
   })
 
   it('開始後は実時刻との差から残り時間を更新する', () => {
-    render(<TimerPanel showStudyTime onTimerLockChange={timerLockMock} />)
+    render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
     fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
     act(() => vi.advanceTimersByTime(1_000))
@@ -40,7 +40,7 @@ describe('TimerPanel', () => {
   })
 
   it('一時停止中は時間を進めない', () => {
-    render(<TimerPanel showStudyTime onTimerLockChange={timerLockMock} />)
+    render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
     fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
     act(() => vi.advanceTimersByTime(2_000))
@@ -52,7 +52,7 @@ describe('TimerPanel', () => {
   })
 
   it('1秒未満で一時停止しても経過した端数を保持する', () => {
-    render(<TimerPanel showStudyTime onTimerLockChange={timerLockMock} />)
+    render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
     fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
     act(() => vi.advanceTimersByTime(500))
@@ -64,7 +64,7 @@ describe('TimerPanel', () => {
   })
 
   it('開始後は認証画面への移動をロックする', () => {
-    render(<TimerPanel showStudyTime onTimerLockChange={timerLockMock} />)
+    render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
     fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
 
@@ -72,7 +72,7 @@ describe('TimerPanel', () => {
   })
 
   it('開始前は52分17分へ変更できる', () => {
-    render(<TimerPanel showStudyTime onTimerLockChange={timerLockMock} />)
+    render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
     expect(screen.getByText('0分')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: '52分 / 17分' }))
@@ -81,7 +81,7 @@ describe('TimerPanel', () => {
   })
 
   it('学習と短い休憩の両方が経過してから復帰すると待機状態になる', () => {
-    render(<TimerPanel showStudyTime onTimerLockChange={timerLockMock} />)
+    render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
     fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
     vi.setSystemTime(new Date('2026-10-27T00:31:00Z'))
@@ -95,7 +95,7 @@ describe('TimerPanel', () => {
   })
 
   it('長い休憩を切り上げると4回分の進捗をリセットする', () => {
-    render(<TimerPanel showStudyTime onTimerLockChange={timerLockMock} />)
+    render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
     fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
 
@@ -129,7 +129,7 @@ describe('TimerPanel', () => {
   })
 
   it('ミュート状態で開始しても途中からブラウンノイズを開始できる', () => {
-    render(<TimerPanel showStudyTime onTimerLockChange={timerLockMock} />)
+    render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'ミュート' }))
     fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
@@ -141,7 +141,7 @@ describe('TimerPanel', () => {
 
   it('ブラウンノイズの正常な開始キャンセルでは警告を表示しない', async () => {
     audioMocks.start.mockResolvedValueOnce('cancelled')
-    render(<TimerPanel showStudyTime onTimerLockChange={timerLockMock} />)
+    render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))

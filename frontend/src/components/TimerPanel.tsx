@@ -14,36 +14,39 @@ type BreakKind = 'short' | 'long' | null
 
 type TimerPanelProps = {
   showStudyTime: boolean
-  onTimerLockChange: (locked: boolean) => void
+  onTimerNavigationLockChange: (locked: boolean) => void
 }
 
-const remainingMillisecondsAt = (
-  endAtMs: number | null,
-  fallbackMilliseconds: number,
+const calculateRemainingMilliseconds = (
+  endTimeMs: number | null,
+  fallbackRemainingMilliseconds: number,
   currentTimeMs = Date.now(),
 ) => {
-  if (endAtMs === null) return fallbackMilliseconds
-  return Math.max(0, endAtMs - currentTimeMs)
+  if (endTimeMs === null) return fallbackRemainingMilliseconds
+  return Math.max(0, endTimeMs - currentTimeMs)
 }
 
-export const TimerPanel = ({ showStudyTime, onTimerLockChange }: TimerPanelProps) => {
+export const TimerPanel = ({
+  showStudyTime,
+  onTimerNavigationLockChange,
+}: TimerPanelProps) => {
   const [presetId, setPresetId] = useState<TimerPresetId>('25-5')
   const [phase, setPhase] = useState<TimerPhase>('focus')
   const [status, setStatus] = useState<TimerStatus>('idle')
   const [breakKind, setBreakKind] = useState<BreakKind>(null)
-  const [remainingMilliseconds, setRemainingMilliseconds] = useState(
+  const [phaseRemainingMilliseconds, setPhaseRemainingMilliseconds] = useState(
     TIMER_PRESETS['25-5'].focusSeconds * 1000,
   )
   const [phaseDurationMilliseconds, setPhaseDurationMilliseconds] = useState(
     TIMER_PRESETS['25-5'].focusSeconds * 1000,
   )
-  const [endAtMs, setEndAtMs] = useState<number | null>(null)
-  const [runStartedRemainingMilliseconds, setRunStartedRemainingMilliseconds] = useState(
+  const [phaseEndAtMs, setPhaseEndAtMs] = useState<number | null>(null)
+  const [remainingAtRunStartMilliseconds, setRemainingAtRunStartMilliseconds] = useState(
     TIMER_PRESETS['25-5'].focusSeconds * 1000,
   )
-  const [nowMs, setNowMs] = useState(0)
+  const [currentTimeMs, setCurrentTimeMs] = useState(0)
   const [completedFocusCount, setCompletedFocusCount] = useState(0)
-  const [recordedFocusMilliseconds, setRecordedFocusMilliseconds] = useState(0)
+  const [accumulatedFocusMilliseconds, setAccumulatedFocusMilliseconds] = useState(0)
   const [volume, setVolume] = useState(0.35)
   const [muted, setMuted] = useState(false)
   const [audioWarning, setAudioWarning] = useState('')
@@ -56,33 +59,37 @@ export const TimerPanel = ({ showStudyTime, onTimerLockChange }: TimerPanelProps
   const preset = TIMER_PRESETS[presetId]
   const isRunning = status === 'running'
   const visibleRemainingMilliseconds = isRunning
-    ? remainingMillisecondsAt(endAtMs, remainingMilliseconds, nowMs)
-    : remainingMilliseconds
+    ? calculateRemainingMilliseconds(
+        phaseEndAtMs,
+        phaseRemainingMilliseconds,
+        currentTimeMs,
+      )
+    : phaseRemainingMilliseconds
   const visibleRemainingSeconds = Math.ceil(visibleRemainingMilliseconds / 1000)
-  const currentFocusRunMilliseconds =
+  const activeFocusElapsedMilliseconds =
     isRunning && phase === 'focus'
-      ? Math.max(0, runStartedRemainingMilliseconds - visibleRemainingMilliseconds)
+      ? Math.max(0, remainingAtRunStartMilliseconds - visibleRemainingMilliseconds)
       : 0
-  const sessionFocusSeconds = Math.floor(
-    (recordedFocusMilliseconds + currentFocusRunMilliseconds) / 1000,
+  const sessionStudySeconds = Math.floor(
+    (accumulatedFocusMilliseconds + activeFocusElapsedMilliseconds) / 1000,
   )
   const remainingRatio =
     phaseDurationMilliseconds === 0
       ? 0
       : visibleRemainingMilliseconds / phaseDurationMilliseconds
-  const timerHasProgress =
+  const hasTimerSessionStarted =
     phase !== 'focus' ||
     status !== 'idle' ||
-    recordedFocusMilliseconds > 0 ||
+    accumulatedFocusMilliseconds > 0 ||
     completedFocusCount > 0
 
   useEffect(() => {
-    onTimerLockChange(timerHasProgress)
-  }, [onTimerLockChange, timerHasProgress])
+    onTimerNavigationLockChange(hasTimerSessionStarted)
+  }, [hasTimerSessionStarted, onTimerNavigationLockChange])
 
   useEffect(() => {
-    return () => onTimerLockChange(false)
-  }, [onTimerLockChange])
+    return () => onTimerNavigationLockChange(false)
+  }, [onTimerNavigationLockChange])
 
   const stopFocusAudio = useCallback(() => {
     stopBrownNoise()
@@ -109,16 +116,16 @@ export const TimerPanel = ({ showStudyTime, onTimerLockChange }: TimerPanelProps
     const isLongBreak =
       preset.focusCountBeforeLongBreak !== null &&
       nextCompletedFocusCount === preset.focusCountBeforeLongBreak
-    const nextBreakSeconds =
+    const breakDurationSeconds =
       isLongBreak && preset.longBreakSeconds !== null
         ? preset.longBreakSeconds
         : preset.shortBreakSeconds
-    const nextBreakMilliseconds = nextBreakSeconds * 1000
-    const breakEndAtMs = focusEndAtMs + nextBreakMilliseconds
+    const breakDurationMilliseconds = breakDurationSeconds * 1000
+    const breakEndAtMs = focusEndAtMs + breakDurationMilliseconds
 
-    setRecordedFocusMilliseconds(
-      (currentMilliseconds) =>
-        currentMilliseconds + runStartedRemainingMilliseconds,
+    setAccumulatedFocusMilliseconds(
+      (previousAccumulatedMilliseconds) =>
+        previousAccumulatedMilliseconds + remainingAtRunStartMilliseconds,
     )
 
     if (currentTimeMs >= breakEndAtMs) {
@@ -126,27 +133,27 @@ export const TimerPanel = ({ showStudyTime, onTimerLockChange }: TimerPanelProps
       setPhase('waiting')
       setBreakKind(null)
       setStatus('idle')
-      setRemainingMilliseconds(preset.focusSeconds * 1000)
+      setPhaseRemainingMilliseconds(preset.focusSeconds * 1000)
       setPhaseDurationMilliseconds(preset.focusSeconds * 1000)
-      setRunStartedRemainingMilliseconds(preset.focusSeconds * 1000)
-      setEndAtMs(null)
+      setRemainingAtRunStartMilliseconds(preset.focusSeconds * 1000)
+      setPhaseEndAtMs(null)
       stopFocusAudio()
       return
     }
 
-    const nextRemainingMilliseconds = remainingMillisecondsAt(
+    const breakRemainingMilliseconds = calculateRemainingMilliseconds(
       breakEndAtMs,
-      nextBreakMilliseconds,
+      breakDurationMilliseconds,
       currentTimeMs,
     )
     setCompletedFocusCount(nextCompletedFocusCount)
     setPhase('break')
     setBreakKind(isLongBreak ? 'long' : 'short')
     setStatus('running')
-    setRemainingMilliseconds(nextRemainingMilliseconds)
-    setPhaseDurationMilliseconds(nextBreakMilliseconds)
-    setRunStartedRemainingMilliseconds(nextRemainingMilliseconds)
-    setEndAtMs(breakEndAtMs)
+    setPhaseRemainingMilliseconds(breakRemainingMilliseconds)
+    setPhaseDurationMilliseconds(breakDurationMilliseconds)
+    setRemainingAtRunStartMilliseconds(breakRemainingMilliseconds)
+    setPhaseEndAtMs(breakEndAtMs)
     stopFocusAudio()
   }, [
     completedFocusCount,
@@ -154,7 +161,7 @@ export const TimerPanel = ({ showStudyTime, onTimerLockChange }: TimerPanelProps
     preset.longBreakSeconds,
     preset.shortBreakSeconds,
     preset.focusSeconds,
-    runStartedRemainingMilliseconds,
+    remainingAtRunStartMilliseconds,
     stopFocusAudio,
   ])
 
@@ -163,28 +170,28 @@ export const TimerPanel = ({ showStudyTime, onTimerLockChange }: TimerPanelProps
     setPhase('waiting')
     setBreakKind(null)
     setStatus('idle')
-    setRemainingMilliseconds(preset.focusSeconds * 1000)
+    setPhaseRemainingMilliseconds(preset.focusSeconds * 1000)
     setPhaseDurationMilliseconds(preset.focusSeconds * 1000)
-    setRunStartedRemainingMilliseconds(preset.focusSeconds * 1000)
-    setEndAtMs(null)
+    setRemainingAtRunStartMilliseconds(preset.focusSeconds * 1000)
+    setPhaseEndAtMs(null)
   }, [breakKind, preset.focusSeconds])
 
   useEffect(() => {
-    if (!isRunning || endAtMs === null) return
+    if (!isRunning || phaseEndAtMs === null) return
 
     const tick = () => {
-      const currentTimeMs = Date.now()
-      setNowMs(currentTimeMs)
+      const tickTimeMs = Date.now()
+      setCurrentTimeMs(tickTimeMs)
 
-      if (currentTimeMs < endAtMs) return
-      if (phase === 'focus') moveToBreak(currentTimeMs, endAtMs)
+      if (tickTimeMs < phaseEndAtMs) return
+      if (phase === 'focus') moveToBreak(tickTimeMs, phaseEndAtMs)
       if (phase === 'break') moveToWaiting()
     }
 
     const intervalId = window.setInterval(tick, 250)
     return () => window.clearInterval(intervalId)
   }, [
-    endAtMs,
+    phaseEndAtMs,
     isRunning,
     moveToBreak,
     moveToWaiting,
@@ -196,48 +203,50 @@ export const TimerPanel = ({ showStudyTime, onTimerLockChange }: TimerPanelProps
   }, [muted, setBrownNoiseVolume, volume])
 
   const startOrResume = () => {
-    const nextPhase = phase === 'waiting' ? 'focus' : phase
-    const nextRemainingMilliseconds =
-      phase === 'waiting' ? preset.focusSeconds * 1000 : remainingMilliseconds
+    const phaseToStart = phase === 'waiting' ? 'focus' : phase
+    const remainingAtStartMilliseconds =
+      phase === 'waiting'
+        ? preset.focusSeconds * 1000
+        : phaseRemainingMilliseconds
 
-    setPhase(nextPhase)
+    setPhase(phaseToStart)
     setStatus('running')
-    setRemainingMilliseconds(nextRemainingMilliseconds)
+    setPhaseRemainingMilliseconds(remainingAtStartMilliseconds)
     setPhaseDurationMilliseconds(
       phase === 'waiting' ? preset.focusSeconds * 1000 : phaseDurationMilliseconds,
     )
-    setRunStartedRemainingMilliseconds(nextRemainingMilliseconds)
-    setEndAtMs(Date.now() + nextRemainingMilliseconds)
-    setNowMs(Date.now())
+    setRemainingAtRunStartMilliseconds(remainingAtStartMilliseconds)
+    setPhaseEndAtMs(Date.now() + remainingAtStartMilliseconds)
+    setCurrentTimeMs(Date.now())
 
-    if (nextPhase === 'focus' && !muted) startFocusAudio(volume)
+    if (phaseToStart === 'focus' && !muted) startFocusAudio(volume)
   }
 
   const pause = () => {
-    const nextRemainingMilliseconds = remainingMillisecondsAt(
-      endAtMs,
-      remainingMilliseconds,
+    const remainingAtPauseMilliseconds = calculateRemainingMilliseconds(
+      phaseEndAtMs,
+      phaseRemainingMilliseconds,
     )
 
     if (phase === 'focus') {
-      setRecordedFocusMilliseconds(
-        (currentMilliseconds) =>
-          currentMilliseconds +
+      setAccumulatedFocusMilliseconds(
+        (previousAccumulatedMilliseconds) =>
+          previousAccumulatedMilliseconds +
           Math.max(
             0,
-            runStartedRemainingMilliseconds - nextRemainingMilliseconds,
+            remainingAtRunStartMilliseconds - remainingAtPauseMilliseconds,
           ),
       )
     }
 
-    setRemainingMilliseconds(nextRemainingMilliseconds)
-    setRunStartedRemainingMilliseconds(nextRemainingMilliseconds)
+    setPhaseRemainingMilliseconds(remainingAtPauseMilliseconds)
+    setRemainingAtRunStartMilliseconds(remainingAtPauseMilliseconds)
     setStatus('paused')
-    setEndAtMs(null)
+    setPhaseEndAtMs(null)
     stopFocusAudio()
   }
 
-  const handlePrimaryAction = () => {
+  const handleTimerControl = () => {
     if (isRunning) {
       pause()
       return
@@ -245,25 +254,25 @@ export const TimerPanel = ({ showStudyTime, onTimerLockChange }: TimerPanelProps
     startOrResume()
   }
 
-  const startFocusEarly = () => {
+  const skipBreakAndStartFocus = () => {
     if (breakKind === 'long') setCompletedFocusCount(0)
     setPhase('focus')
     setBreakKind(null)
     setStatus('running')
-    setRemainingMilliseconds(preset.focusSeconds * 1000)
+    setPhaseRemainingMilliseconds(preset.focusSeconds * 1000)
     setPhaseDurationMilliseconds(preset.focusSeconds * 1000)
-    setRunStartedRemainingMilliseconds(preset.focusSeconds * 1000)
-    setEndAtMs(Date.now() + preset.focusSeconds * 1000)
-    setNowMs(Date.now())
+    setRemainingAtRunStartMilliseconds(preset.focusSeconds * 1000)
+    setPhaseEndAtMs(Date.now() + preset.focusSeconds * 1000)
+    setCurrentTimeMs(Date.now())
     if (!muted) startFocusAudio(volume)
   }
 
   const changePreset = (nextPresetId: TimerPresetId) => {
     const nextPreset = TIMER_PRESETS[nextPresetId]
     setPresetId(nextPresetId)
-    setRemainingMilliseconds(nextPreset.focusSeconds * 1000)
+    setPhaseRemainingMilliseconds(nextPreset.focusSeconds * 1000)
     setPhaseDurationMilliseconds(nextPreset.focusSeconds * 1000)
-    setRunStartedRemainingMilliseconds(nextPreset.focusSeconds * 1000)
+    setRemainingAtRunStartMilliseconds(nextPreset.focusSeconds * 1000)
   }
 
   const toggleMute = () => {
@@ -321,7 +330,7 @@ export const TimerPanel = ({ showStudyTime, onTimerLockChange }: TimerPanelProps
                 className={id === presetId ? 'preset-button is-selected' : 'preset-button'}
                 type="button"
                 key={id}
-                disabled={timerHasProgress}
+                disabled={hasTimerSessionStarted}
                 aria-pressed={id === presetId}
                 onClick={() => changePreset(id)}
               >
@@ -377,13 +386,17 @@ export const TimerPanel = ({ showStudyTime, onTimerLockChange }: TimerPanelProps
             type="button"
             aria-label={primaryActionLabel}
             title={primaryActionLabel}
-            onClick={handlePrimaryAction}
+            onClick={handleTimerControl}
           >
             <span aria-hidden="true">{isRunning ? 'Ⅱ' : '▶'}</span>
           </button>
 
           {phase === 'break' && (
-            <button className="text-button break-skip-button" type="button" onClick={startFocusEarly}>
+            <button
+              className="text-button break-skip-button"
+              type="button"
+              onClick={skipBreakAndStartFocus}
+            >
               休憩を切り上げて学習を始める
             </button>
           )}
@@ -392,7 +405,7 @@ export const TimerPanel = ({ showStudyTime, onTimerLockChange }: TimerPanelProps
             {showStudyTime && (
               <div>
                 <dt>今回の学習時間</dt>
-                <dd>{formatStudyTime(sessionFocusSeconds)}</dd>
+                <dd>{formatStudyTime(sessionStudySeconds)}</dd>
               </div>
             )}
             {presetId === '25-5' && (

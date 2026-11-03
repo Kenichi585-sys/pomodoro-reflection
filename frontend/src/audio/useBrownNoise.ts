@@ -8,7 +8,7 @@ type BrownNoiseController = {
   setVolume: (volume: number) => void
 }
 
-const normalizedGain = (volume: number) => {
+const volumeToGain = (volume: number) => {
   const clampedVolume = Math.min(1, Math.max(0, volume))
   return clampedVolume * 2.4
 }
@@ -18,13 +18,13 @@ export const useBrownNoise = (): BrownNoiseController => {
   const gainRef = useRef<GainNode | null>(null)
   const highPassRef = useRef<BiquadFilterNode | null>(null)
   const lowPassRef = useRef<BiquadFilterNode | null>(null)
-  const bodyFilterRef = useRef<BiquadFilterNode | null>(null)
+  const lowFrequencyBoostFilterRef = useRef<BiquadFilterNode | null>(null)
   const limiterRef = useRef<DynamicsCompressorNode | null>(null)
   const bufferRef = useRef<AudioBuffer | null>(null)
   const sourceRef = useRef<AudioBufferSourceNode | null>(null)
   const startRequestIdRef = useRef(0)
 
-  const disconnectSource = useCallback(() => {
+  const stopAndDisconnectSource = useCallback(() => {
     const source = sourceRef.current
     if (!source) return
 
@@ -35,24 +35,24 @@ export const useBrownNoise = (): BrownNoiseController => {
 
   const stop = useCallback(() => {
     startRequestIdRef.current += 1
-    disconnectSource()
-  }, [disconnectSource])
+    stopAndDisconnectSource()
+  }, [stopAndDisconnectSource])
 
   const setVolume = useCallback((volume: number) => {
     const context = contextRef.current
     const gain = gainRef.current
     if (!context || !gain) return
 
-    gain.gain.setTargetAtTime(normalizedGain(volume), context.currentTime, 0.02)
+    gain.gain.setTargetAtTime(volumeToGain(volume), context.currentTime, 0.02)
   }, [])
 
   const start = useCallback(
     async (volume: number) => {
       if (typeof AudioContext === 'undefined') return 'failed'
 
-      const requestId = startRequestIdRef.current + 1
-      startRequestIdRef.current = requestId
-      disconnectSource()
+      const startRequestId = startRequestIdRef.current + 1
+      startRequestIdRef.current = startRequestId
+      stopAndDisconnectSource()
 
       try {
         const context = contextRef.current ?? new AudioContext()
@@ -70,11 +70,11 @@ export const useBrownNoise = (): BrownNoiseController => {
           lowPass.frequency.value = 360
           lowPass.Q.value = 0.45
 
-          const bodyFilter = context.createBiquadFilter()
-          bodyFilter.type = 'peaking'
-          bodyFilter.frequency.value = 110
-          bodyFilter.Q.value = 0.55
-          bodyFilter.gain.value = 3
+          const lowFrequencyBoostFilter = context.createBiquadFilter()
+          lowFrequencyBoostFilter.type = 'peaking'
+          lowFrequencyBoostFilter.frequency.value = 110
+          lowFrequencyBoostFilter.Q.value = 0.55
+          lowFrequencyBoostFilter.gain.value = 3
 
           const limiter = context.createDynamicsCompressor()
           limiter.threshold.value = -3
@@ -84,19 +84,19 @@ export const useBrownNoise = (): BrownNoiseController => {
           limiter.release.value = 0.15
 
           highPass.connect(lowPass)
-          lowPass.connect(bodyFilter)
-          bodyFilter.connect(gain)
+          lowPass.connect(lowFrequencyBoostFilter)
+          lowFrequencyBoostFilter.connect(gain)
           gain.connect(limiter)
           limiter.connect(context.destination)
           highPassRef.current = highPass
           lowPassRef.current = lowPass
-          bodyFilterRef.current = bodyFilter
+          lowFrequencyBoostFilterRef.current = lowFrequencyBoostFilter
           limiterRef.current = limiter
           gainRef.current = gain
         }
 
         await context.resume()
-        if (requestId !== startRequestIdRef.current) return 'cancelled'
+        if (startRequestId !== startRequestIdRef.current) return 'cancelled'
 
         let buffer = bufferRef.current
         if (!buffer) {
@@ -122,17 +122,17 @@ export const useBrownNoise = (): BrownNoiseController => {
         source.buffer = buffer
         source.loop = true
         source.connect(highPassRef.current ?? gain)
-        gain.gain.setValueAtTime(normalizedGain(volume), context.currentTime)
+        gain.gain.setValueAtTime(volumeToGain(volume), context.currentTime)
         source.start()
         sourceRef.current = source
         return 'started'
       } catch {
-        if (requestId !== startRequestIdRef.current) return 'cancelled'
-        disconnectSource()
+        if (startRequestId !== startRequestIdRef.current) return 'cancelled'
+        stopAndDisconnectSource()
         return 'failed'
       }
     },
-    [disconnectSource],
+    [stopAndDisconnectSource],
   )
 
   useEffect(() => {
@@ -143,7 +143,7 @@ export const useBrownNoise = (): BrownNoiseController => {
       gainRef.current = null
       highPassRef.current = null
       lowPassRef.current = null
-      bodyFilterRef.current = null
+      lowFrequencyBoostFilterRef.current = null
       limiterRef.current = null
       bufferRef.current = null
       if (context) void context.close()

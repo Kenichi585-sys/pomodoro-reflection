@@ -34,7 +34,7 @@ const readJson = async <T>(response: Response): Promise<T | null> => {
   }
 }
 
-const request = async <T>(url: string, init?: RequestInit): Promise<T> => {
+const requestJson = async <T>(url: string, init?: RequestInit): Promise<T> => {
   let response: Response
 
   try {
@@ -48,7 +48,7 @@ const request = async <T>(url: string, init?: RequestInit): Promise<T> => {
     )
   }
 
-  const body = await readJson<T & ErrorResponse>(response)
+  const responseBody = await readJson<T & ErrorResponse>(response)
   if (!response.ok) {
     if (response.status === 429) {
       throw new AuthApiError(
@@ -63,33 +63,33 @@ const request = async <T>(url: string, init?: RequestInit): Promise<T> => {
     }
 
     throw new AuthApiError(
-      body?.detail ?? '入力内容を確認してください。',
-      body?.errors,
+      responseBody?.detail ?? '入力内容を確認してください。',
+      responseBody?.errors,
     )
   }
 
-  return body as T
+  return responseBody as T
 }
 
-const csrfToken = async (): Promise<string> => {
-  const response = await request<{ csrf_token: string }>('/api/auth/csrf/')
+const getCsrfToken = async (): Promise<string> => {
+  const response = await requestJson<{ csrf_token: string }>('/api/auth/csrf/')
   return response.csrf_token
 }
 
-const post = async <T>(url: string, body: object): Promise<T> => {
-  const token = await csrfToken()
-  return request<T>(url, {
+const postJsonWithCsrf = async <T>(url: string, requestBody: object): Promise<T> => {
+  const csrfToken = await getCsrfToken()
+  return requestJson<T>(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-CSRFToken': token,
+      'X-CSRFToken': csrfToken,
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify(requestBody),
   })
 }
 
 export const getSession = async (): Promise<AuthUser | null> => {
-  const response = await request<SessionResponse>('/api/auth/me/')
+  const response = await requestJson<SessionResponse>('/api/auth/me/')
   return response.is_authenticated ? response.user : null
 }
 
@@ -98,7 +98,7 @@ export const registerAccount = async (input: {
   password: string
   passwordConfirmation: string
 }): Promise<AuthUser> => {
-  const response = await post<UserResponse>('/api/auth/register/', {
+  const response = await postJsonWithCsrf<UserResponse>('/api/auth/register/', {
     email: input.email,
     password: input.password,
     password_confirmation: input.passwordConfirmation,
@@ -110,10 +110,10 @@ export const loginAccount = async (input: {
   email: string
   password: string
 }): Promise<AuthUser> => {
-  const response = await post<UserResponse>('/api/auth/login/', input)
+  const response = await postJsonWithCsrf<UserResponse>('/api/auth/login/', input)
   return response.user
 }
 
 export const logoutAccount = async (): Promise<void> => {
-  await post<void>('/api/auth/logout/', {})
+  await postJsonWithCsrf<void>('/api/auth/logout/', {})
 }

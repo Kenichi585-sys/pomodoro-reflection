@@ -29,6 +29,8 @@ describe('useBrownNoise', () => {
     const source = {
       buffer: null,
       loop: false,
+      loopStart: 0,
+      loopEnd: 0,
       connect: vi.fn(),
       disconnect: vi.fn(),
       start: vi.fn(),
@@ -96,6 +98,8 @@ describe('useBrownNoise', () => {
     const source = {
       buffer: null,
       loop: false,
+      loopStart: 0,
+      loopEnd: 0,
       connect: vi.fn(),
       disconnect: vi.fn(),
       start: vi.fn(),
@@ -169,6 +173,81 @@ describe('useBrownNoise', () => {
     ])
     expect(filters[2].gain.value).toBe(3)
     expect(source.start).toHaveBeenCalledOnce()
+    expect(source.loopStart).toBe(0.05)
+    expect(source.loopEnd).toBe(30)
+    expect(channels.every((samples) => samples.at(-1) === samples[0])).toBe(true)
+
+    unmount()
+  })
+
+  it('音声開始の待機中に変更した最新音量で再生を開始する', async () => {
+    const resume = createDeferred()
+    const source = {
+      buffer: null,
+      loop: false,
+      loopStart: 0,
+      loopEnd: 0,
+      connect: vi.fn(),
+      disconnect: vi.fn(),
+      start: vi.fn(),
+      stop: vi.fn(),
+    }
+    const filter = {
+      type: 'lowpass',
+      frequency: { value: 0 },
+      Q: { value: 0 },
+      gain: { value: 0 },
+      connect: vi.fn(),
+    }
+    const gain = {
+      gain: {
+        setTargetAtTime: vi.fn(),
+        setValueAtTime: vi.fn(),
+      },
+      connect: vi.fn(),
+    }
+    const limiter = {
+      threshold: { value: 0 },
+      knee: { value: 0 },
+      ratio: { value: 0 },
+      attack: { value: 0 },
+      release: { value: 0 },
+      connect: vi.fn(),
+    }
+    const context = {
+      currentTime: 12,
+      sampleRate: 10,
+      destination: {},
+      close: vi.fn().mockResolvedValue(undefined),
+      createBiquadFilter: vi.fn(() => ({ ...filter })),
+      createBuffer: vi.fn(() => ({
+        numberOfChannels: 2,
+        getChannelData: vi.fn(() => new Float32Array(300)),
+      })),
+      createBufferSource: vi.fn(() => source),
+      createDynamicsCompressor: vi.fn(() => limiter),
+      createGain: vi.fn(() => gain),
+      resume: vi.fn(() => resume.promise),
+    }
+    vi.stubGlobal(
+      'AudioContext',
+      vi.fn(function AudioContextMock() {
+        return context
+      }),
+    )
+
+    const { result, unmount } = renderHook(() => useBrownNoise())
+    let startResult: Promise<BrownNoiseStartResult> = Promise.resolve('cancelled')
+    act(() => {
+      startResult = result.current.start(0.35)
+    })
+    act(() => {
+      result.current.setVolume(0.7)
+      resume.resolve()
+    })
+
+    await expect(startResult).resolves.toBe('started')
+    expect(gain.gain.setValueAtTime).toHaveBeenCalledWith(1.68, 12)
 
     unmount()
   })

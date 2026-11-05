@@ -28,6 +28,25 @@ export const TIMER_PRESETS: Record<TimerPresetId, TimerPreset> = {
   },
 }
 
+export const TIMER_TEST_PRESETS: Record<TimerPresetId, TimerPreset> = {
+  '25-5': {
+    id: '25-5',
+    label: '3秒 / 3秒（25分 / 5分確認）',
+    focusSeconds: 3,
+    shortBreakSeconds: 3,
+    longBreakSeconds: 3,
+    focusCountBeforeLongBreak: 4,
+  },
+  '52-17': {
+    id: '52-17',
+    label: '3秒 / 3秒（52分 / 17分確認）',
+    focusSeconds: 3,
+    shortBreakSeconds: 3,
+    longBreakSeconds: null,
+    focusCountBeforeLongBreak: null,
+  },
+}
+
 export const formatClock = (totalSeconds: number) => {
   const safeSeconds = Math.max(0, Math.floor(totalSeconds))
   const minutes = Math.floor(safeSeconds / 60)

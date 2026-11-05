@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 
+import { useBreakMusic } from '../audio/useBreakMusic'
 import { useBrownNoise } from '../audio/useBrownNoise'
 import {
   formatClock,
   formatStudyTime,
   TIMER_PRESETS,
+  TIMER_TEST_PRESETS,
   type TimerPresetId,
 } from '../timer/timerConfig'
 
@@ -17,6 +19,8 @@ type TimerPanelProps = {
   onTimerNavigationLockChange: (locked: boolean) => void
 }
 
+const AUDIO_FADE_OUT_MILLISECONDS = 7_000
+
 const calculateRemainingMilliseconds = (
   endTimeMs: number | null,
   fallbackRemainingMilliseconds: number,
@@ -26,37 +30,69 @@ const calculateRemainingMilliseconds = (
   return Math.max(0, endTimeMs - currentTimeMs)
 }
 
+const calculateFadedAudioVolume = (baseVolume: number, remainingMilliseconds: number) => {
+  const fadeRatio = Math.min(
+    1,
+    Math.max(0, remainingMilliseconds) / AUDIO_FADE_OUT_MILLISECONDS,
+  )
+  return baseVolume * fadeRatio
+}
+
 export const TimerPanel = ({
   showStudyTime,
   onTimerNavigationLockChange,
 }: TimerPanelProps) => {
+  const isTimerTestMode =
+    import.meta.env.DEV &&
+    new URLSearchParams(window.location.search).get('timerTest') === '1'
+  const timerPresets = isTimerTestMode ? TIMER_TEST_PRESETS : TIMER_PRESETS
+  // 選択中の「25分／5分」または「52分／17分」。
   const [presetId, setPresetId] = useState<TimerPresetId>('25-5')
+  // 今が学習中・休憩中・次の学習待ちのどれか。
   const [phase, setPhase] = useState<TimerPhase>('focus')
+  // タイマーが開始前・動作中・一時停止中のどれか。
   const [status, setStatus] = useState<TimerStatus>('idle')
+  // 休憩中なら、短い休憩か長い休憩か。休憩中でなければnull。
   const [breakKind, setBreakKind] = useState<BreakKind>(null)
+  // 今の学習または休憩が、あと何ミリ秒残っているか。
   const [phaseRemainingMilliseconds, setPhaseRemainingMilliseconds] = useState(
-    TIMER_PRESETS['25-5'].focusSeconds * 1000,
+    timerPresets['25-5'].focusSeconds * 1000,
   )
+  // 今の学習または休憩は、全部で何ミリ秒か。円の進捗率の計算に使う。
   const [phaseDurationMilliseconds, setPhaseDurationMilliseconds] = useState(
-    TIMER_PRESETS['25-5'].focusSeconds * 1000,
+    timerPresets['25-5'].focusSeconds * 1000,
   )
+  // 今の学習または休憩が終わる時刻。停止中はnull。
   const [phaseEndAtMs, setPhaseEndAtMs] = useState<number | null>(null)
+  // 開始・再開した時点で、あと何ミリ秒残っていたか。今回動いた時間の計算に使う。
   const [remainingAtRunStartMilliseconds, setRemainingAtRunStartMilliseconds] = useState(
-    TIMER_PRESETS['25-5'].focusSeconds * 1000,
+    timerPresets['25-5'].focusSeconds * 1000,
   )
+  // 残り時間の表示に使う現在時刻。
   const [currentTimeMs, setCurrentTimeMs] = useState(0)
+  // 現在のタイマー設定で、学習を何回完了したか。
   const [completedFocusCount, setCompletedFocusCount] = useState(0)
+  // 一時停止または完了までに、記録済みとなった学習時間。
   const [accumulatedFocusMilliseconds, setAccumulatedFocusMilliseconds] = useState(0)
+  // 学習音と休憩音の音量。0が無音、1が最大。
   const [volume, setVolume] = useState(0.35)
+  // 学習音と休憩音を消しているか。
   const [muted, setMuted] = useState(false)
+  // 音の開始に失敗したとき、画面に出すメッセージ。
   const [audioWarning, setAudioWarning] = useState('')
   const {
     start: startBrownNoise,
     stop: stopBrownNoise,
     setVolume: setBrownNoiseVolume,
   } = useBrownNoise()
+  const {
+    start: startBreakMusic,
+    pause: pauseBreakMusic,
+    stop: stopBreakMusic,
+    setVolume: setBreakMusicVolume,
+  } = useBreakMusic()
 
-  const preset = TIMER_PRESETS[presetId]
+  const preset = timerPresets[presetId]
   const isRunning = status === 'running'
   const visibleRemainingMilliseconds = isRunning
     ? calculateRemainingMilliseconds(
@@ -65,6 +101,9 @@ export const TimerPanel = ({
         currentTimeMs,
       )
     : phaseRemainingMilliseconds
+  const playbackVolume = muted
+    ? 0
+    : calculateFadedAudioVolume(volume, visibleRemainingMilliseconds)
   const visibleRemainingSeconds = Math.ceil(visibleRemainingMilliseconds / 1000)
   const activeFocusElapsedMilliseconds =
     isRunning && phase === 'focus'
@@ -102,13 +141,36 @@ export const TimerPanel = ({
 
       void startBrownNoise(nextVolume).then((result) => {
         if (result === 'failed') {
+          setMuted(true)
           setAudioWarning(
             'ブラウンノイズを開始できませんでした。タイマーはそのまま利用できます。',
           )
+          return
         }
+
+        if (result === 'started') setAudioWarning('')
       })
     },
     [startBrownNoise],
+  )
+
+  const startBreakAudio = useCallback(
+    (nextVolume: number) => {
+      if (nextVolume === 0) return
+
+      void startBreakMusic(nextVolume).then((result) => {
+        if (result === 'failed') {
+          setMuted(true)
+          setAudioWarning(
+            '休憩用の音楽を開始できませんでした。タイマーはそのまま利用できます。',
+          )
+          return
+        }
+
+        if (result === 'started') setAudioWarning('')
+      })
+    },
+    [startBreakMusic],
   )
 
   const moveToBreak = useCallback((currentTimeMs: number, focusEndAtMs: number) => {
@@ -129,15 +191,18 @@ export const TimerPanel = ({
     )
 
     if (currentTimeMs >= breakEndAtMs) {
+      const nextFocusDurationMilliseconds = preset.focusSeconds * 1000
+
       setCompletedFocusCount(isLongBreak ? 0 : nextCompletedFocusCount)
       setPhase('waiting')
       setBreakKind(null)
       setStatus('idle')
-      setPhaseRemainingMilliseconds(preset.focusSeconds * 1000)
-      setPhaseDurationMilliseconds(preset.focusSeconds * 1000)
-      setRemainingAtRunStartMilliseconds(preset.focusSeconds * 1000)
+      setPhaseRemainingMilliseconds(nextFocusDurationMilliseconds)
+      setPhaseDurationMilliseconds(nextFocusDurationMilliseconds)
+      setRemainingAtRunStartMilliseconds(nextFocusDurationMilliseconds)
       setPhaseEndAtMs(null)
       stopFocusAudio()
+      stopBreakMusic()
       return
     }
 
@@ -155,6 +220,11 @@ export const TimerPanel = ({
     setRemainingAtRunStartMilliseconds(breakRemainingMilliseconds)
     setPhaseEndAtMs(breakEndAtMs)
     stopFocusAudio()
+    if (!muted) {
+      startBreakAudio(
+        calculateFadedAudioVolume(volume, breakRemainingMilliseconds),
+      )
+    }
   }, [
     completedFocusCount,
     preset.focusCountBeforeLongBreak,
@@ -162,19 +232,26 @@ export const TimerPanel = ({
     preset.shortBreakSeconds,
     preset.focusSeconds,
     remainingAtRunStartMilliseconds,
+    muted,
+    startBreakAudio,
     stopFocusAudio,
+    stopBreakMusic,
+    volume,
   ])
 
   const moveToWaiting = useCallback(() => {
+    const nextFocusDurationMilliseconds = preset.focusSeconds * 1000
+
     if (breakKind === 'long') setCompletedFocusCount(0)
     setPhase('waiting')
     setBreakKind(null)
     setStatus('idle')
-    setPhaseRemainingMilliseconds(preset.focusSeconds * 1000)
-    setPhaseDurationMilliseconds(preset.focusSeconds * 1000)
-    setRemainingAtRunStartMilliseconds(preset.focusSeconds * 1000)
+    setPhaseRemainingMilliseconds(nextFocusDurationMilliseconds)
+    setPhaseDurationMilliseconds(nextFocusDurationMilliseconds)
+    setRemainingAtRunStartMilliseconds(nextFocusDurationMilliseconds)
     setPhaseEndAtMs(null)
-  }, [breakKind, preset.focusSeconds])
+    stopBreakMusic()
+  }, [breakKind, preset.focusSeconds, stopBreakMusic])
 
   useEffect(() => {
     if (!isRunning || phaseEndAtMs === null) return
@@ -199,27 +276,29 @@ export const TimerPanel = ({
   ])
 
   useEffect(() => {
-    setBrownNoiseVolume(muted ? 0 : volume)
-  }, [muted, setBrownNoiseVolume, volume])
+    setBrownNoiseVolume(playbackVolume)
+    setBreakMusicVolume(playbackVolume)
+  }, [playbackVolume, setBreakMusicVolume, setBrownNoiseVolume])
 
   const startOrResume = () => {
     const phaseToStart = phase === 'waiting' ? 'focus' : phase
+    const focusDurationMilliseconds = preset.focusSeconds * 1000
     const remainingAtStartMilliseconds =
-      phase === 'waiting'
-        ? preset.focusSeconds * 1000
-        : phaseRemainingMilliseconds
+      phase === 'waiting' ? focusDurationMilliseconds : phaseRemainingMilliseconds
 
     setPhase(phaseToStart)
     setStatus('running')
     setPhaseRemainingMilliseconds(remainingAtStartMilliseconds)
     setPhaseDurationMilliseconds(
-      phase === 'waiting' ? preset.focusSeconds * 1000 : phaseDurationMilliseconds,
+      phase === 'waiting' ? focusDurationMilliseconds : phaseDurationMilliseconds,
     )
     setRemainingAtRunStartMilliseconds(remainingAtStartMilliseconds)
     setPhaseEndAtMs(Date.now() + remainingAtStartMilliseconds)
     setCurrentTimeMs(Date.now())
 
-    if (phaseToStart === 'focus' && !muted) startFocusAudio(volume)
+    const volumeAtStart = calculateFadedAudioVolume(volume, remainingAtStartMilliseconds)
+    if (phaseToStart === 'focus' && !muted) startFocusAudio(volumeAtStart)
+    if (phaseToStart === 'break' && !muted) startBreakAudio(volumeAtStart)
   }
 
   const pause = () => {
@@ -243,7 +322,8 @@ export const TimerPanel = ({
     setRemainingAtRunStartMilliseconds(remainingAtPauseMilliseconds)
     setStatus('paused')
     setPhaseEndAtMs(null)
-    stopFocusAudio()
+    if (phase === 'focus') stopFocusAudio()
+    if (phase === 'break') pauseBreakMusic()
   }
 
   const handleTimerControl = () => {
@@ -255,24 +335,29 @@ export const TimerPanel = ({
   }
 
   const skipBreakAndStartFocus = () => {
+    const focusDurationMilliseconds = preset.focusSeconds * 1000
+
     if (breakKind === 'long') setCompletedFocusCount(0)
     setPhase('focus')
     setBreakKind(null)
     setStatus('running')
-    setPhaseRemainingMilliseconds(preset.focusSeconds * 1000)
-    setPhaseDurationMilliseconds(preset.focusSeconds * 1000)
-    setRemainingAtRunStartMilliseconds(preset.focusSeconds * 1000)
-    setPhaseEndAtMs(Date.now() + preset.focusSeconds * 1000)
+    setPhaseRemainingMilliseconds(focusDurationMilliseconds)
+    setPhaseDurationMilliseconds(focusDurationMilliseconds)
+    setRemainingAtRunStartMilliseconds(focusDurationMilliseconds)
+    setPhaseEndAtMs(Date.now() + focusDurationMilliseconds)
     setCurrentTimeMs(Date.now())
+    stopBreakMusic()
     if (!muted) startFocusAudio(volume)
   }
 
   const changePreset = (nextPresetId: TimerPresetId) => {
-    const nextPreset = TIMER_PRESETS[nextPresetId]
+    const nextPreset = timerPresets[nextPresetId]
+    const nextFocusDurationMilliseconds = nextPreset.focusSeconds * 1000
+
     setPresetId(nextPresetId)
-    setPhaseRemainingMilliseconds(nextPreset.focusSeconds * 1000)
-    setPhaseDurationMilliseconds(nextPreset.focusSeconds * 1000)
-    setRemainingAtRunStartMilliseconds(nextPreset.focusSeconds * 1000)
+    setPhaseRemainingMilliseconds(nextFocusDurationMilliseconds)
+    setPhaseDurationMilliseconds(nextFocusDurationMilliseconds)
+    setRemainingAtRunStartMilliseconds(nextFocusDurationMilliseconds)
   }
 
   const toggleMute = () => {
@@ -281,11 +366,16 @@ export const TimerPanel = ({
 
     if (nextMuted) {
       stopFocusAudio()
+      pauseBreakMusic()
       return
     }
 
+    const resumedVolume = calculateFadedAudioVolume(volume, visibleRemainingMilliseconds)
     if (isRunning && phase === 'focus' && volume > 0) {
-      startFocusAudio(volume)
+      startFocusAudio(resumedVolume)
+    }
+    if (isRunning && phase === 'break' && volume > 0) {
+      startBreakAudio(resumedVolume)
     }
   }
 
@@ -294,21 +384,31 @@ export const TimerPanel = ({
 
     if (nextVolume === 0) {
       stopFocusAudio()
+      pauseBreakMusic()
       return
     }
 
     if (volume === 0 && !muted && isRunning && phase === 'focus') {
-      startFocusAudio(nextVolume)
+      startFocusAudio(
+        calculateFadedAudioVolume(nextVolume, visibleRemainingMilliseconds),
+      )
+    }
+    if (volume === 0 && !muted && isRunning && phase === 'break') {
+      startBreakAudio(
+        calculateFadedAudioVolume(nextVolume, visibleRemainingMilliseconds),
+      )
     }
   }
 
-  const breakMinutes = Math.round(phaseDurationMilliseconds / 60_000)
+  const breakDurationLabel = isTimerTestMode
+    ? `${Math.round(phaseDurationMilliseconds / 1000)}秒休憩`
+    : `${Math.round(phaseDurationMilliseconds / 60_000)}分休憩`
   const phaseLabel =
     phase === 'focus'
       ? '学習'
       : phase === 'waiting'
         ? '次の学習を待機中'
-        : `${breakMinutes}分休憩`
+        : breakDurationLabel
   const primaryActionLabel = isRunning
     ? `${phaseLabel}を一時停止`
     : phase === 'waiting'
@@ -325,7 +425,7 @@ export const TimerPanel = ({
       <div className="timer-layout">
         <div className="timer-visual">
           <div className="preset-selector" aria-label="タイマー設定">
-            {(Object.keys(TIMER_PRESETS) as TimerPresetId[]).map((id) => (
+            {(Object.keys(timerPresets) as TimerPresetId[]).map((id) => (
               <button
                 className={id === presetId ? 'preset-button is-selected' : 'preset-button'}
                 type="button"
@@ -334,7 +434,7 @@ export const TimerPanel = ({
                 aria-pressed={id === presetId}
                 onClick={() => changePreset(id)}
               >
-                {TIMER_PRESETS[id].label}
+                {timerPresets[id].label}
               </button>
             ))}
           </div>

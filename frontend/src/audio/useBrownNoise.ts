@@ -8,6 +8,9 @@ type BrownNoiseController = {
   setVolume: (volume: number) => void
 }
 
+const BROWN_NOISE_DURATION_SECONDS = 30
+const LOOP_CROSSFADE_SECONDS = 0.05
+
 const volumeToGain = (volume: number) => {
   const clampedVolume = Math.min(1, Math.max(0, volume))
   return clampedVolume * 2.4
@@ -23,6 +26,7 @@ export const useBrownNoise = (): BrownNoiseController => {
   const bufferRef = useRef<AudioBuffer | null>(null)
   const sourceRef = useRef<AudioBufferSourceNode | null>(null)
   const startRequestIdRef = useRef(0)
+  const volumeRef = useRef(0)
 
   const stopAndDisconnectSource = useCallback(() => {
     const source = sourceRef.current
@@ -39,6 +43,7 @@ export const useBrownNoise = (): BrownNoiseController => {
   }, [stopAndDisconnectSource])
 
   const setVolume = useCallback((volume: number) => {
+    volumeRef.current = volume
     const context = contextRef.current
     const gain = gainRef.current
     if (!context || !gain) return
@@ -50,6 +55,7 @@ export const useBrownNoise = (): BrownNoiseController => {
     async (volume: number) => {
       if (typeof AudioContext === 'undefined') return 'failed'
 
+      volumeRef.current = volume
       const startRequestId = startRequestIdRef.current + 1
       startRequestIdRef.current = startRequestId
       stopAndDisconnectSource()
@@ -100,7 +106,14 @@ export const useBrownNoise = (): BrownNoiseController => {
 
         let buffer = bufferRef.current
         if (!buffer) {
-          const frameCount = context.sampleRate * 30
+          const frameCount = context.sampleRate * BROWN_NOISE_DURATION_SECONDS
+          const loopCrossfadeFrameCount = Math.max(
+            1,
+            Math.min(
+              Math.round(context.sampleRate * LOOP_CROSSFADE_SECONDS),
+              Math.floor(frameCount / 2),
+            ),
+          )
           buffer = context.createBuffer(2, frameCount, context.sampleRate)
 
           for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
@@ -113,6 +126,15 @@ export const useBrownNoise = (): BrownNoiseController => {
               previousSample = brownNoise
               samples[index] = brownNoise * 3.2
             }
+
+            for (let index = 0; index < loopCrossfadeFrameCount; index += 1) {
+              const progress = (index + 1) / loopCrossfadeFrameCount
+              const fadeOut = Math.cos((progress * Math.PI) / 2)
+              const fadeIn = Math.sin((progress * Math.PI) / 2)
+              const loopEndIndex = frameCount - loopCrossfadeFrameCount + index
+              samples[loopEndIndex] =
+                samples[loopEndIndex] * fadeOut + samples[index] * fadeIn
+            }
           }
 
           bufferRef.current = buffer
@@ -121,8 +143,10 @@ export const useBrownNoise = (): BrownNoiseController => {
         const source = context.createBufferSource()
         source.buffer = buffer
         source.loop = true
+        source.loopStart = LOOP_CROSSFADE_SECONDS
+        source.loopEnd = BROWN_NOISE_DURATION_SECONDS
         source.connect(highPassRef.current ?? gain)
-        gain.gain.setValueAtTime(volumeToGain(volume), context.currentTime)
+        gain.gain.setValueAtTime(volumeToGain(volumeRef.current), context.currentTime)
         source.start()
         sourceRef.current = source
         return 'started'

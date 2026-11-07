@@ -106,6 +106,42 @@ class AuthenticationApiTests(TestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn("email", response.json()["errors"])
 
+    def test_register_returns_field_specific_messages_for_empty_input(self):
+        response = self.post_with_csrf(
+            "/api/auth/register/",
+            {
+                "email": "",
+                "password": "",
+                "password_confirmation": "",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.json()["errors"],
+            {
+                "email": ["メールアドレスを入力してください。"],
+                "password": ["パスワードを入力してください。"],
+                "password_confirmation": ["パスワードを入力してください。"],
+            },
+        )
+
+    def test_register_returns_clear_message_for_invalid_email_format(self):
+        response = self.post_with_csrf(
+            "/api/auth/register/",
+            {
+                "email": "invalid-email",
+                "password": "safe-test-password-123",
+                "password_confirmation": "safe-test-password-123",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.json()["errors"]["email"],
+            ["正しい形式のメールアドレスを入力してください。"],
+        )
+
     def test_register_uses_django_password_validation(self):
         response = self.post_with_csrf(
             "/api/auth/register/",
@@ -135,6 +171,41 @@ class AuthenticationApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.json()["user"]["email"], "User@example.com")
+
+    def test_login_returns_field_specific_messages_for_empty_input(self):
+        response = self.post_with_csrf(
+            "/api/auth/login/",
+            {"email": "", "password": ""},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.json()["errors"],
+            {
+                "email": ["メールアドレスを入力してください。"],
+                "password": ["パスワードを入力してください。"],
+            },
+        )
+
+    def test_login_keeps_credential_failure_message_generic(self):
+        get_user_model().objects.create_user(
+            email="user@example.com",
+            password="safe-test-password-123",
+        )
+
+        response = self.post_with_csrf(
+            "/api/auth/login/",
+            {
+                "email": "user@example.com",
+                "password": "incorrect-password",
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(
+            response.json()["errors"]["non_field_errors"],
+            ["メールアドレスまたはパスワードが正しくありません。"],
+        )
 
     def test_logout_ends_session(self):
         get_user_model().objects.create_user(

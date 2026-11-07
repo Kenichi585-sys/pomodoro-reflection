@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
 
-function jsonResponse(body: object, status = 200) {
+const jsonResponse = (body: object, status = 200) => {
   return {
     ok: status >= 200 && status < 300,
     status,
@@ -48,10 +48,28 @@ describe('App', () => {
       await screen.findByRole('button', { name: 'ログインせずタイマーを使う' }),
     )
 
-    expect(
-      screen.getByRole('heading', { name: '認証機能の準備ができました' }),
-    ).toBeInTheDocument()
+    expect(screen.getByLabelText('学習 25:00')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '学習を開始' })).toBeInTheDocument()
+    expect(screen.queryByText('今回の学習時間')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'ログイン' })).toBeInTheDocument()
+  })
+
+  it('タイマー開始後はログインと新規登録への移動を無効にする', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({ is_authenticated: false, user: null }),
+      ),
+    )
+
+    render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'ログインせずタイマーを使う' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+
+    expect(screen.getByRole('button', { name: 'ログイン' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '新規登録' })).toBeDisabled()
   })
 
   it('ログイン後にアカウントメニューからメールアドレスを確認できる', async () => {
@@ -77,6 +95,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'ログイン' }))
 
     const accountButton = await screen.findByRole('button', { name: 'アカウント' })
+    expect(screen.getByText('今回の学習時間')).toBeInTheDocument()
     expect(screen.queryByText('User@example.com')).not.toBeInTheDocument()
     fireEvent.click(accountButton)
     expect(screen.getByText('User@example.com')).toBeInTheDocument()
@@ -88,6 +107,57 @@ describe('App', () => {
         headers: expect.objectContaining({ 'X-CSRFToken': 'csrf-token' }),
       }),
     )
+  })
+
+  it('ログイン中もタイマー開始後はアカウント操作を無効にする', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        jsonResponse({
+          is_authenticated: true,
+          user: { email: 'User@example.com' },
+        }),
+      ),
+    )
+
+    render(<App />)
+    const accountButton = await screen.findByRole('button', { name: 'アカウント' })
+    fireEvent.click(accountButton)
+    const logoutButton = screen.getByRole('button', { name: 'ログアウト' })
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+
+    expect(accountButton).toBeDisabled()
+    expect(logoutButton).toBeDisabled()
+  })
+
+  it('ログイン欄ごとの入力エラーを対象の入力欄付近に表示する', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({ is_authenticated: false, user: null }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }))
+      .mockResolvedValueOnce(
+        jsonResponse(
+          {
+            errors: {
+              email: ['メールアドレスを入力してください。'],
+              password: ['パスワードを入力してください。'],
+            },
+          },
+          400,
+        ),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: 'ログイン' }))
+    fireEvent.click(screen.getByRole('button', { name: 'ログイン' }))
+
+    expect(
+      await screen.findByText('メールアドレスを入力してください。'),
+    ).toBeInTheDocument()
+    expect(screen.getByText('パスワードを入力してください。')).toBeInTheDocument()
   })
 
   it('新規登録画面に保存内容の案内を表示する', async () => {
@@ -140,9 +210,7 @@ describe('App', () => {
     expect(
       screen.getByRole('heading', { name: '学習時間と振り返りを保存できます' }),
     ).toBeInTheDocument()
-    expect(
-      screen.queryByRole('heading', { name: '認証機能の準備ができました' }),
-    ).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('学習 25:00')).not.toBeInTheDocument()
   })
 
   it('認証画面のアプリ名から最初の画面へ戻れる', async () => {

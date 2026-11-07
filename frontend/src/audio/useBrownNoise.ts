@@ -6,10 +6,12 @@ type BrownNoiseController = {
   start: (volume: number) => Promise<BrownNoiseStartResult>
   stop: () => void
   setVolume: (volume: number) => void
+  resumeIfNeeded: (volume: number) => void
 }
 
 const BROWN_NOISE_DURATION_SECONDS = 30
-const LOOP_CROSSFADE_SECONDS = 0.05
+const BROWN_NOISE_WARMUP_SECONDS = 1
+const LOOP_CROSSFADE_SECONDS = 0.5
 
 const volumeToGain = (volume: number) => {
   const clampedVolume = Math.min(1, Math.max(0, volume))
@@ -27,6 +29,23 @@ export const useBrownNoise = (): BrownNoiseController => {
   const sourceRef = useRef<AudioBufferSourceNode | null>(null)
   const startRequestIdRef = useRef(0)
   const volumeRef = useRef(0)
+  const shouldBePlayingRef = useRef(false)
+
+  const resumeContextIfNeeded = useCallback((volume: number) => {
+    const context = contextRef.current
+    if (
+      !shouldBePlayingRef.current ||
+      !context ||
+      context.state === 'running' ||
+      context.state === 'closed'
+    ) {
+      return
+    }
+
+    volumeRef.current = volume
+    gainRef.current?.gain.setValueAtTime(volumeToGain(volume), context.currentTime)
+    void context.resume().catch(() => undefined)
+  }, [])
 
   const stopAndDisconnectSource = useCallback(() => {
     const source = sourceRef.current
@@ -38,6 +57,7 @@ export const useBrownNoise = (): BrownNoiseController => {
   }, [])
 
   const stop = useCallback(() => {
+    shouldBePlayingRef.current = false
     startRequestIdRef.current += 1
     stopAndDisconnectSource()
   }, [stopAndDisconnectSource])
@@ -56,13 +76,17 @@ export const useBrownNoise = (): BrownNoiseController => {
       if (typeof AudioContext === 'undefined') return 'failed'
 
       volumeRef.current = volume
+      shouldBePlayingRef.current = true
       const startRequestId = startRequestIdRef.current + 1
       startRequestIdRef.current = startRequestId
       stopAndDisconnectSource()
 
       try {
-        const context = contextRef.current ?? new AudioContext()
-        contextRef.current = context
+        let context = contextRef.current
+        if (!context) {
+          context = new AudioContext()
+          contextRef.current = context
+        }
 
         const gain = gainRef.current ?? context.createGain()
         if (!gainRef.current) {
@@ -120,6 +144,14 @@ export const useBrownNoise = (): BrownNoiseController => {
             const samples = buffer.getChannelData(channel)
             let previousSample = 0
 
+            const warmupFrameCount = Math.round(
+              context.sampleRate * BROWN_NOISE_WARMUP_SECONDS,
+            )
+            for (let index = 0; index < warmupFrameCount; index += 1) {
+              const whiteNoise = Math.random() * 2 - 1
+              previousSample = (previousSample + 0.02 * whiteNoise) / 1.02
+            }
+
             for (let index = 0; index < frameCount; index += 1) {
               const whiteNoise = Math.random() * 2 - 1
               const brownNoise = (previousSample + 0.02 * whiteNoise) / 1.02
@@ -147,11 +179,12 @@ export const useBrownNoise = (): BrownNoiseController => {
         source.loopEnd = BROWN_NOISE_DURATION_SECONDS
         source.connect(highPassRef.current ?? gain)
         gain.gain.setValueAtTime(volumeToGain(volumeRef.current), context.currentTime)
-        source.start()
+        source.start(0, LOOP_CROSSFADE_SECONDS)
         sourceRef.current = source
         return 'started'
       } catch {
         if (startRequestId !== startRequestIdRef.current) return 'cancelled'
+        shouldBePlayingRef.current = false
         stopAndDisconnectSource()
         return 'failed'
       }
@@ -174,5 +207,5 @@ export const useBrownNoise = (): BrownNoiseController => {
     }
   }, [stop])
 
-  return { start, stop, setVolume }
+  return { start, stop, setVolume, resumeIfNeeded: resumeContextIfNeeded }
 }

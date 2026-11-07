@@ -7,6 +7,7 @@ const audioMocks = vi.hoisted(() => ({
   start: vi.fn().mockResolvedValue('started'),
   stop: vi.fn(),
   setVolume: vi.fn(),
+  resumeIfNeeded: vi.fn(),
 }))
 const breakMusicMocks = vi.hoisted(() => ({
   start: vi.fn().mockResolvedValue('started'),
@@ -31,6 +32,7 @@ describe('TimerPanel', () => {
     audioMocks.start.mockReset().mockResolvedValue('started')
     audioMocks.stop.mockClear()
     audioMocks.setVolume.mockClear()
+    audioMocks.resumeIfNeeded.mockClear()
     breakMusicMocks.start.mockReset().mockResolvedValue('started')
     breakMusicMocks.pause.mockClear()
     breakMusicMocks.stop.mockClear()
@@ -65,15 +67,15 @@ describe('TimerPanel', () => {
     expect(screen.getByRole('button', { name: '学習を再開' })).toBeInTheDocument()
   })
 
-  it('終了7秒前から再生音量だけを下げ、画面の設定音量は変えない', () => {
+  it('終了5秒前から再生音量だけを下げ、画面の設定音量は変えない', () => {
     render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
     fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
-    vi.setSystemTime(new Date(Date.now() + 25 * 60 * 1000 - 5_250))
+    vi.setSystemTime(new Date(Date.now() + 25 * 60 * 1000 - 2_750))
     act(() => vi.advanceTimersByTime(250))
 
-    expect(audioMocks.setVolume).toHaveBeenLastCalledWith(0.25)
-    expect(breakMusicMocks.setVolume).toHaveBeenLastCalledWith(0.25)
+    expect(audioMocks.setVolume).toHaveBeenLastCalledWith(0.175)
+    expect(breakMusicMocks.setVolume).toHaveBeenLastCalledWith(0.175)
     expect(screen.getByRole('slider', { name: '音量' })).toHaveValue('35')
   })
 
@@ -106,21 +108,21 @@ describe('TimerPanel', () => {
     expect(screen.getByLabelText('学習 52:00')).toBeInTheDocument()
   })
 
-  it('開発用URLでは3秒で学習と休憩の切り替えを確認できる', async () => {
+  it('開発用URLでは7秒で学習と休憩の切り替えを確認できる', async () => {
     window.history.replaceState(null, '', '/?timerTest=1')
     render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
-    expect(screen.getByLabelText('学習 00:03')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '3秒 / 3秒（25分 / 5分確認）' })).toBeInTheDocument()
+    expect(screen.getByLabelText('学習 00:07')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '7秒 / 7秒（25分 / 5分確認）' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
-    vi.setSystemTime(new Date(Date.now() + 2_750))
+    vi.setSystemTime(new Date(Date.now() + 6_750))
     await act(async () => vi.advanceTimersByTime(250))
 
-    expect(screen.getByRole('heading', { name: '3秒休憩' })).toBeInTheDocument()
-    expect(breakMusicMocks.start.mock.calls[0]?.[0]).toBeCloseTo(0.15)
+    expect(screen.getByRole('heading', { name: '7秒休憩' })).toBeInTheDocument()
+    expect(breakMusicMocks.start.mock.calls[0]?.[0]).toBeCloseTo(0.35)
 
-    vi.setSystemTime(new Date(Date.now() + 2_750))
+    vi.setSystemTime(new Date(Date.now() + 6_750))
     await act(async () => vi.advanceTimersByTime(250))
 
     expect(screen.getByRole('heading', { name: '次の学習を待機中' })).toBeInTheDocument()
@@ -141,15 +143,46 @@ describe('TimerPanel', () => {
     expect(screen.getByText('1 / 4回')).toBeInTheDocument()
   })
 
-  it('休憩終了7秒前へ復帰した場合はフェード後の音量で休憩音を開始する', async () => {
+  it('学習終了後に画面へ戻っても古いブラウンノイズを再開しない', async () => {
     render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
 
     fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
-    vi.setSystemTime(new Date(Date.now() + 30 * 60 * 1000 - 5_250))
+    audioMocks.resumeIfNeeded.mockClear()
+
+    vi.setSystemTime(new Date(Date.now() + 25 * 60 * 1000))
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+
+    expect(audioMocks.resumeIfNeeded).not.toHaveBeenCalled()
+    expect(audioMocks.stop).toHaveBeenCalled()
+    expect(breakMusicMocks.start).toHaveBeenCalled()
+    expect(screen.getByRole('heading', { name: '5分休憩' })).toBeInTheDocument()
+  })
+
+  it('フェード中に画面へ戻った場合は現在の音量でブラウンノイズを再開する', async () => {
+    render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+    audioMocks.resumeIfNeeded.mockClear()
+
+    vi.setSystemTime(new Date(Date.now() + 25 * 60 * 1000 - 2_500))
+    await act(async () => {
+      document.dispatchEvent(new Event('visibilitychange'))
+    })
+
+    expect(audioMocks.resumeIfNeeded).toHaveBeenCalledWith(0.175)
+  })
+
+  it('休憩終了5秒前へ復帰した場合はフェード後の音量で休憩音を開始する', async () => {
+    render(<TimerPanel showStudyTime onTimerNavigationLockChange={timerLockMock} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+    vi.setSystemTime(new Date(Date.now() + 30 * 60 * 1000 - 2_750))
     await act(async () => vi.advanceTimersByTime(250))
 
-    expect(screen.getByLabelText('5分休憩 00:05')).toBeInTheDocument()
-    expect(breakMusicMocks.start.mock.calls[0]?.[0]).toBeCloseTo(0.25)
+    expect(screen.getByLabelText('5分休憩 00:03')).toBeInTheDocument()
+    expect(breakMusicMocks.start.mock.calls[0]?.[0]).toBeCloseTo(0.175)
   })
 
   it('長い休憩を切り上げると4回分の進捗をリセットする', () => {

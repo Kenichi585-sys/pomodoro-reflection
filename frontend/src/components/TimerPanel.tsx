@@ -19,7 +19,7 @@ type TimerPanelProps = {
   onTimerNavigationLockChange: (locked: boolean) => void;
 };
 
-const AUDIO_FADE_OUT_MILLISECONDS = 7_000;
+const AUDIO_FADE_OUT_MILLISECONDS = 5_000;
 
 const calculateRemainingMilliseconds = (
   endTimeMs: number | null,
@@ -88,6 +88,7 @@ export const TimerPanel = ({
     start: startBrownNoise,
     stop: stopBrownNoise,
     setVolume: setBrownNoiseVolume,
+    resumeIfNeeded: resumeBrownNoiseIfNeeded,
   } = useBrownNoise();
   // 休憩音を操作する関数を、TimerPanelで使う名前に変えて取り出す。
   const {
@@ -273,14 +274,41 @@ export const TimerPanel = ({
       const tickTimeMs = Date.now();
       setCurrentTimeMs(tickTimeMs);
 
-      if (tickTimeMs < phaseEndAtMs) return;
+      if (tickTimeMs < phaseEndAtMs) {
+        if (phase === "focus" && !muted) {
+          const remainingMilliseconds = phaseEndAtMs - tickTimeMs;
+          const resumedVolume = calculateFadedAudioVolume(
+            volume,
+            remainingMilliseconds,
+          );
+          resumeBrownNoiseIfNeeded(resumedVolume);
+        }
+        return;
+      }
       if (phase === "focus") moveToBreak(tickTimeMs, phaseEndAtMs);
       if (phase === "break") moveToWaiting();
     };
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     const intervalId = window.setInterval(tick, 250);
-    return () => window.clearInterval(intervalId);
-  }, [phaseEndAtMs, isRunning, moveToBreak, moveToWaiting, phase]);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.clearInterval(intervalId);
+    };
+  }, [
+    phaseEndAtMs,
+    isRunning,
+    moveToBreak,
+    moveToWaiting,
+    muted,
+    phase,
+    resumeBrownNoiseIfNeeded,
+    volume,
+  ]);
 
   useEffect(() => {
     setBrownNoiseVolume(playbackVolume);

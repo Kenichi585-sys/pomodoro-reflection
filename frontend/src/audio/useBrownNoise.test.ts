@@ -60,6 +60,8 @@ describe('useBrownNoise', () => {
     }
     const context = {
       currentTime: 0,
+      state: 'running',
+      onstatechange: null as ((event: Event) => void) | null,
       sampleRate: 10,
       destination: {},
       close: vi.fn().mockResolvedValue(undefined),
@@ -145,6 +147,8 @@ describe('useBrownNoise', () => {
     }))
     const context = {
       currentTime: 0,
+      state: 'running',
+      onstatechange: null as ((event: Event) => void) | null,
       sampleRate: 10,
       destination: {},
       close: vi.fn().mockResolvedValue(undefined),
@@ -172,10 +176,27 @@ describe('useBrownNoise', () => {
       ['peaking', 110],
     ])
     expect(filters[2].gain.value).toBe(3)
-    expect(source.start).toHaveBeenCalledOnce()
-    expect(source.loopStart).toBe(0.05)
+    expect(source.start).toHaveBeenCalledWith(0, 0.5)
+    expect(source.loop).toBe(true)
+    expect(source.loopStart).toBe(0.5)
     expect(source.loopEnd).toBe(30)
-    expect(channels.every((samples) => samples.at(-1) === samples[0])).toBe(true)
+    expect(
+      channels.every(
+        (samples) =>
+          samples.at(-1) === samples[Math.round(context.sampleRate * source.loopStart) - 1],
+      ),
+    ).toBe(true)
+
+    context.state = 'suspended'
+    context.resume.mockClear()
+    gain.gain.setValueAtTime.mockClear()
+    act(() => result.current.resumeIfNeeded(0.2))
+
+    expect(gain.gain.setValueAtTime).toHaveBeenCalledWith(0.48, 0)
+    expect(context.resume).toHaveBeenCalledOnce()
+    expect(gain.gain.setValueAtTime.mock.invocationCallOrder[0]).toBeLessThan(
+      context.resume.mock.invocationCallOrder[0],
+    )
 
     unmount()
   })
@@ -216,6 +237,8 @@ describe('useBrownNoise', () => {
     }
     const context = {
       currentTime: 12,
+      state: 'running',
+      onstatechange: null as ((event: Event) => void) | null,
       sampleRate: 10,
       destination: {},
       close: vi.fn().mockResolvedValue(undefined),

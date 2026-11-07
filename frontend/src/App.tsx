@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 
 import {
   AuthApiError,
@@ -7,76 +7,77 @@ import {
   logoutAccount,
   registerAccount,
   type AuthUser,
-} from './api/auth'
-import { AuthForm, type AuthFormMode } from './components/AuthForm'
-import { TimerPanel } from './components/TimerPanel'
-import './App.css'
+} from "./api/auth";
+import { AuthForm, type AuthFormMode } from "./components/AuthForm";
+import { TimerPanel } from "./components/TimerPanel";
+import "./App.css";
 
-type Screen = 'loading' | 'welcome' | 'timer' | AuthFormMode
+type Screen = "loading" | "welcome" | "timer" | AuthFormMode;
 
-const GUEST_CHOICE_KEY = 'pomodoro-reflection:guest-choice'
+const GUEST_CHOICE_KEY = "pomodoro-reflection:guest-choice";
 
 const App = () => {
-  const [screen, setScreen] = useState<Screen>('loading')
-  const [user, setUser] = useState<AuthUser | null>(null)
-  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false)
-  const [isTimerNavigationLocked, setIsTimerNavigationLocked] = useState(false)
-  const [startupError, setStartupError] = useState('')
+  const [screen, setScreen] = useState<Screen>("loading");
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isTimerNavigationLocked, setIsTimerNavigationLocked] = useState(false);
+  const [startupError, setStartupError] = useState("");
 
   useEffect(() => {
-    let isSessionRequestActive = true
+    let isSessionRequestActive = true;
 
     getSession()
       .then((sessionUser) => {
-        if (!isSessionRequestActive) return
-        setUser(sessionUser)
-        const isGuestModeSelected = localStorage.getItem(GUEST_CHOICE_KEY) === 'true'
-        setScreen(sessionUser || isGuestModeSelected ? 'timer' : 'welcome')
+        if (!isSessionRequestActive) return;
+        setUser(sessionUser);
+        const isGuestModeSelected =
+          localStorage.getItem(GUEST_CHOICE_KEY) === "true";
+        setScreen(sessionUser || isGuestModeSelected ? "timer" : "welcome");
       })
       .catch((error: unknown) => {
-        if (!isSessionRequestActive) return
+        if (!isSessionRequestActive) return;
         setStartupError(
           error instanceof AuthApiError
             ? error.message
-            : 'ログイン状態を確認できませんでした。',
-        )
-        setScreen('welcome')
-      })
+            : "ログイン状態を確認できませんでした。",
+        );
+        setScreen("welcome");
+      });
 
     return () => {
-      isSessionRequestActive = false
-    }
-  }, [])
+      isSessionRequestActive = false;
+    };
+  }, []);
 
   const showTimerAsGuest = () => {
-    localStorage.setItem(GUEST_CHOICE_KEY, 'true')
-    setScreen('timer')
-  }
+    localStorage.setItem(GUEST_CHOICE_KEY, "true");
+    setScreen("timer");
+  };
 
   const handleAuthSuccess = (authenticatedUser: AuthUser) => {
-    localStorage.removeItem(GUEST_CHOICE_KEY)
-    setUser(authenticatedUser)
-    setScreen('timer')
-  }
+    localStorage.removeItem(GUEST_CHOICE_KEY);
+    setUser(authenticatedUser);
+    setScreen("timer");
+  };
 
   const handleLogout = async () => {
-    setStartupError('')
+    setStartupError("");
     try {
-      await logoutAccount()
-      setUser(null)
-      setIsAccountMenuOpen(false)
-      setScreen('welcome')
+      await logoutAccount();
+      setUser(null);
+      setIsAccountMenuOpen(false);
+      setScreen("welcome");
     } catch (error) {
       setStartupError(
         error instanceof AuthApiError
           ? error.message
-          : 'ログアウトできませんでした。',
-      )
+          : "ログアウトできませんでした。",
+      );
     }
-  }
+  };
 
-  const isTimerVisible = screen === 'timer'
-  const isAuthVisible = screen === 'login' || screen === 'register'
+  const isTimerVisible = screen === "timer";
+  const isAuthVisible = screen === "login" || screen === "register";
 
   return (
     <div className="app-shell">
@@ -85,7 +86,7 @@ const App = () => {
           <button
             className="brand-button"
             type="button"
-            onClick={() => setScreen('welcome')}
+            onClick={() => setScreen("welcome")}
           >
             振り返り付きポモドーロ
           </button>
@@ -125,7 +126,7 @@ const App = () => {
                   className="header-button"
                   type="button"
                   disabled={isTimerNavigationLocked}
-                  onClick={() => setScreen('login')}
+                  onClick={() => setScreen("login")}
                 >
                   ログイン
                 </button>
@@ -133,7 +134,7 @@ const App = () => {
                   className="header-button"
                   type="button"
                   disabled={isTimerNavigationLocked}
-                  onClick={() => setScreen('register')}
+                  onClick={() => setScreen("register")}
                 >
                   新規登録
                 </button>
@@ -144,9 +145,11 @@ const App = () => {
       </header>
 
       <main className="main-content">
-        {screen === 'loading' && <p role="status">ログイン状態を確認しています</p>}
+        {screen === "loading" && (
+          <p role="status">ログイン状態を確認しています</p>
+        )}
 
-        {screen === 'welcome' && (
+        {screen === "welcome" && (
           <section className="welcome-card" aria-labelledby="welcome-title">
             <p className="eyebrow">学習の記録</p>
             <h1 id="welcome-title">学習時間と振り返りを保存できます</h1>
@@ -159,24 +162,36 @@ const App = () => {
               </p>
             )}
             <div className="welcome-actions">
-              <button className="primary-button" type="button" onClick={() => setScreen('login')}>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => setScreen("login")}
+              >
                 ログイン
               </button>
-              <button className="secondary-button" type="button" onClick={() => setScreen('register')}>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setScreen("register")}
+              >
                 新規登録
               </button>
-              <button className="text-button" type="button" onClick={showTimerAsGuest}>
+              <button
+                className="text-button"
+                type="button"
+                onClick={showTimerAsGuest}
+              >
                 ログインせずタイマーを使う
               </button>
             </div>
           </section>
         )}
 
-        {(screen === 'login' || screen === 'register') && (
+        {(screen === "login" || screen === "register") && (
           <AuthForm
             key={screen}
             mode={screen}
-            onCancel={() => setScreen('welcome')}
+            onCancel={() => setScreen("welcome")}
             onSwitchMode={setScreen}
             onLogin={loginAccount}
             onRegister={registerAccount}
@@ -199,7 +214,7 @@ const App = () => {
         )}
       </main>
     </div>
-  )
-}
+  );
+};
 
-export default App
+export default App;

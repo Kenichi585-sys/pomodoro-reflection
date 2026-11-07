@@ -5,6 +5,7 @@ import {
 } from './timerConfig'
 
 export const TIMER_RECOVERY_VERSION = 1
+const TIMER_RECOVERY_STORAGE_KEY_PREFIX = 'pomodoro-reflection:timer-recovery'
 
 export type TimerRecoveryPhase = 'focus' | 'break' | 'waiting'
 export type TimerRecoveryBreakKind = 'short' | 'long' | null
@@ -29,6 +30,12 @@ export type TimerRecoveryLoadResult =
 
 type TimerRecoveryStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type TimerRecoveryPresets = Readonly<Record<TimerPresetId, TimerPreset>>
+
+export const createTimerRecoveryStorageKey = (
+  ownerKey: string,
+  isTimerTestMode: boolean,
+) =>
+  `${TIMER_RECOVERY_STORAGE_KEY_PREFIX}:${isTimerTestMode ? 'test' : 'standard'}:${encodeURIComponent(ownerKey)}`
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)

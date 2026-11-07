@@ -203,6 +203,7 @@ const App = () => {
           <>
             <TimerPanel
               showStudyTime={user !== null}
+              recoveryOwnerKey={user ? `user:${user.email}` : "guest"}
               onTimerNavigationLockChange={setIsTimerNavigationLocked}
             />
             {startupError && (

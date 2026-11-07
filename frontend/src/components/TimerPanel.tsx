@@ -9,6 +9,12 @@ import {
   TIMER_TEST_PRESETS,
   type TimerPresetId,
 } from "../timer/timerConfig";
+import {
+  createTimerRecoveryStorageKey,
+  saveTimerRecoverySnapshot,
+  TIMER_RECOVERY_VERSION,
+  type TimerRecoverySnapshot,
+} from "../timer/timerRecovery";
 
 type TimerPhase = "focus" | "break" | "waiting";
 type TimerStatus = "idle" | "running" | "paused";
@@ -16,10 +22,12 @@ type BreakKind = "short" | "long" | null;
 
 type TimerPanelProps = {
   showStudyTime: boolean;
+  recoveryOwnerKey: string;
   onTimerNavigationLockChange: (locked: boolean) => void;
 };
 
 const AUDIO_FADE_OUT_MILLISECONDS = 5_000;
+const TIMER_RECOVERY_SAVE_INTERVAL_MILLISECONDS = 5_000;
 
 const calculateRemainingMilliseconds = (
   endTimeMs: number | null,
@@ -43,6 +51,7 @@ const calculateFadedAudioVolume = (
 
 export const TimerPanel = ({
   showStudyTime,
+  recoveryOwnerKey,
   onTimerNavigationLockChange,
 }: TimerPanelProps) => {
   const isTimerTestMode =
@@ -83,6 +92,8 @@ export const TimerPanel = ({
   const [muted, setMuted] = useState(false);
   // 音の開始に失敗したとき、画面に出すメッセージ。
   const [audioWarning, setAudioWarning] = useState("");
+  // タイマーの復旧用データをブラウザへ保存できなかったときのメッセージ。
+  const [recoveryWarning, setRecoveryWarning] = useState("");
   // ブラウンノイズを操作する関数を、TimerPanelで使う名前に変えて取り出す。
   const {
     start: startBrownNoise,
@@ -132,6 +143,83 @@ export const TimerPanel = ({
     status !== "idle" ||
     accumulatedFocusMilliseconds > 0 ||
     completedFocusCount > 0;
+  const recoveryStorageKey = createTimerRecoveryStorageKey(
+    recoveryOwnerKey,
+    isTimerTestMode,
+  );
+
+  const saveCurrentRecoveryState = useCallback(() => {
+    const savedAtMs = Date.now();
+
+    if (
+      !hasTimerSessionStarted ||
+      (isRunning &&
+        (phaseEndAtMs === null || savedAtMs >= phaseEndAtMs))
+    ) {
+      return;
+    }
+
+    const remainingMilliseconds = isRunning
+      ? calculateRemainingMilliseconds(
+          phaseEndAtMs,
+          phaseRemainingMilliseconds,
+          savedAtMs,
+        )
+      : phaseRemainingMilliseconds;
+    const activeFocusMilliseconds =
+      isRunning && phase === "focus"
+        ? Math.max(
+            0,
+            remainingAtRunStartMilliseconds - remainingMilliseconds,
+          )
+        : 0;
+    const snapshot: TimerRecoverySnapshot = {
+      version: TIMER_RECOVERY_VERSION,
+      savedAtMs,
+      presetId,
+      phase,
+      breakKind,
+      phaseRemainingMilliseconds: remainingMilliseconds,
+      phaseDurationMilliseconds,
+      accumulatedFocusMilliseconds:
+        accumulatedFocusMilliseconds + activeFocusMilliseconds,
+      completedFocusCount,
+    };
+    let didSave = false;
+
+    try {
+      didSave = saveTimerRecoverySnapshot(
+        window.localStorage,
+        recoveryStorageKey,
+        snapshot,
+        timerPresets,
+      );
+    } catch {
+      didSave = false;
+    }
+
+    queueMicrotask(() => {
+      setRecoveryWarning(
+        didSave
+          ? ""
+          : "タイマーの復旧用データを保存できませんでした。タイマーはそのまま利用できます。",
+      );
+    });
+  }, [
+    accumulatedFocusMilliseconds,
+    breakKind,
+    completedFocusCount,
+    hasTimerSessionStarted,
+    isRunning,
+    phase,
+    phaseDurationMilliseconds,
+    phaseEndAtMs,
+    phaseRemainingMilliseconds,
+    presetId,
+    recoveryStorageKey,
+    remainingAtRunStartMilliseconds,
+    timerPresets,
+  ]);
 
   useEffect(() => {
     onTimerNavigationLockChange(hasTimerSessionStarted);
@@ -140,6 +228,32 @@ export const TimerPanel = ({
   useEffect(() => {
     return () => onTimerNavigationLockChange(false);
   }, [onTimerNavigationLockChange]);
+
+  useEffect(() => {
+    saveCurrentRecoveryState();
+  }, [saveCurrentRecoveryState]);
+
+  useEffect(() => {
+    if (!isRunning) return;
+
+    const intervalId = window.setInterval(
+      saveCurrentRecoveryState,
+      TIMER_RECOVERY_SAVE_INTERVAL_MILLISECONDS,
+    );
+    return () => window.clearInterval(intervalId);
+  }, [isRunning, saveCurrentRecoveryState]);
+
+  useEffect(() => {
+    if (!hasTimerSessionStarted) return;
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "hidden") saveCurrentRecoveryState();
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () =>
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [hasTimerSessionStarted, saveCurrentRecoveryState]);
 
   const stopFocusAudio = useCallback(() => {
     stopBrownNoise();
@@ -604,6 +718,11 @@ export const TimerPanel = ({
           {audioWarning && (
             <p className="timer-warning" role="status">
               {audioWarning}
+            </p>
+          )}
+          {recoveryWarning && (
+            <p className="timer-warning" role="status">
+              {recoveryWarning}
             </p>
           )}
         </div>

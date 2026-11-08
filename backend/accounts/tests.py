@@ -4,6 +4,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 from rest_framework import status
 from rest_framework.test import APIClient
+from study_records.models import StudyTheme
 
 
 class UserModelTests(TestCase):
@@ -70,6 +71,12 @@ class AuthenticationApiTests(TestCase):
         self.assertEqual(response.json()["user"]["email"], "User@example.com")
         self.assertTrue(
             get_user_model().objects.filter(email="User@example.com").exists()
+        )
+        self.assertTrue(
+            StudyTheme.objects.filter(
+                user__email="User@example.com",
+                name="プログラミング",
+            ).exists()
         )
 
         session_response = self.client.get("/api/auth/me/")

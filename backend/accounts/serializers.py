@@ -1,6 +1,7 @@
 from django.contrib.auth import get_user_model, password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
+from study_records.models import StudyTheme
 
 
 User = get_user_model()
@@ -64,7 +65,9 @@ class RegisterSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         validated_data.pop("password_confirmation")
-        return User.objects.create_user(**validated_data)
+        user = User.objects.create_user(**validated_data)
+        StudyTheme.objects.create(user=user, name="プログラミング")
+        return user
 
 
 class LoginSerializer(serializers.Serializer):

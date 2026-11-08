@@ -7,6 +7,8 @@ from django.db import IntegrityError, transaction
 from django.db.models.deletion import RestrictedError
 from django.test import TestCase
 from django.utils import timezone
+from rest_framework import status
+from rest_framework.test import APIClient
 
 from .models import StudyRecord, StudyTheme
 
@@ -107,3 +109,91 @@ class StudyRecordModelTests(TestCase):
         for overrides in invalid_values:
             with self.subTest(overrides=overrides), self.assertRaises(ValidationError):
                 self.create_record(started_at=started_at, **overrides)
+
+
+class StudyRecordCreateApiTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            email="api-learner@example.com",
+            password="valid-test-password",
+        )
+        self.theme = StudyTheme.objects.create(
+            user=self.user,
+            name="プログラミング",
+        )
+        self.client = APIClient(enforce_csrf_checks=True)
+        self.started_at = timezone.now()
+        self.payload = {
+            "client_uuid": str(uuid.uuid4()),
+            "started_at": self.started_at.isoformat(),
+            "ended_at": (self.started_at + timedelta(minutes=25)).isoformat(),
+            "study_seconds": 25 * 60,
+            "preset": StudyRecord.Preset.POMODORO,
+            "focus_seconds": 25 * 60,
+            "break_seconds": 5 * 60,
+            "completed_focus_count": 1,
+        }
+
+    def test_authenticated_user_can_create_record_without_duplication(self):
+        self.client.force_login(self.user)
+        csrf_response = self.client.get("/api/auth/csrf/")
+        csrf_token = csrf_response.json()["csrf_token"]
+
+        missing_csrf_response = self.client.post(
+            "/api/study-records/",
+            self.payload,
+            format="json",
+        )
+
+        first_response = self.client.post(
+            "/api/study-records/",
+            self.payload,
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        second_response = self.client.post(
+            "/api/study-records/",
+            self.payload,
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        self.assertEqual(
+            missing_csrf_response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(first_response.json()["id"], second_response.json()["id"])
+        self.assertEqual(StudyRecord.objects.count(), 1)
+        record = StudyRecord.objects.get()
+        self.assertEqual(record.user, self.user)
+        self.assertEqual(record.theme, self.theme)
+        self.assertEqual(record.study_date, timezone.localdate(self.started_at))
+
+        inconsistent_response = self.client.post(
+            "/api/study-records/",
+            {
+                **self.payload,
+                "client_uuid": str(uuid.uuid4()),
+                "study_seconds": 1,
+                "completed_focus_count": 4,
+            },
+            format="json",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+        self.assertEqual(
+            inconsistent_response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+        self.assertEqual(StudyRecord.objects.count(), 1)
+
+    def test_guest_cannot_create_record(self):
+        response = self.client.post(
+            "/api/study-records/",
+            self.payload,
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(StudyRecord.objects.exists())

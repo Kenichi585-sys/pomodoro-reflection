@@ -4,6 +4,9 @@ from django.db import models
 from django.utils import timezone
 
 
+DEFAULT_STUDY_THEME_NAME = "プログラミング"
+
+
 class StudyTheme(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,

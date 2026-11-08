@@ -11,6 +11,7 @@ import {
 } from "../timer/timerConfig";
 import {
   createTimerRecoveryStorageKey,
+  loadTimerRecoverySnapshot,
   saveTimerRecoverySnapshot,
   TIMER_RECOVERY_VERSION,
   type TimerRecoverySnapshot,
@@ -28,6 +29,45 @@ type TimerPanelProps = {
 
 const AUDIO_FADE_OUT_MILLISECONDS = 5_000;
 const TIMER_RECOVERY_SAVE_INTERVAL_MILLISECONDS = 5_000;
+
+const loadInitialRecoveryState = (
+  storageKey: string,
+  timerPresets: typeof TIMER_PRESETS,
+) => {
+  try {
+    const result = loadTimerRecoverySnapshot(
+      window.localStorage,
+      storageKey,
+      timerPresets,
+    );
+
+    if (result.status === "loaded") {
+      return { snapshot: result.snapshot, warning: "" };
+    }
+    if (result.status === "invalid") {
+      return {
+        snapshot: null,
+        warning:
+          "前回のタイマー情報を読み込めませんでした。新しいタイマーを利用できます。",
+      };
+    }
+    if (result.status === "unavailable") {
+      return {
+        snapshot: null,
+        warning:
+          "タイマーの復旧用データを確認できませんでした。新しいタイマーを利用できます。",
+      };
+    }
+  } catch {
+    return {
+      snapshot: null,
+      warning:
+        "タイマーの復旧用データを確認できませんでした。新しいタイマーを利用できます。",
+    };
+  }
+
+  return { snapshot: null, warning: "" };
+};
 
 const calculateRemainingMilliseconds = (
   endTimeMs: number | null,
@@ -58,6 +98,15 @@ export const TimerPanel = ({
     import.meta.env.DEV &&
     new URLSearchParams(window.location.search).get("timerTest") === "1";
   const timerPresets = isTimerTestMode ? TIMER_TEST_PRESETS : TIMER_PRESETS;
+  const recoveryStorageKey = createTimerRecoveryStorageKey(
+    recoveryOwnerKey,
+    isTimerTestMode,
+  );
+  const [initialRecoveryState] = useState(() =>
+    loadInitialRecoveryState(recoveryStorageKey, timerPresets),
+  );
+  const [pendingRecoverySnapshot, setPendingRecoverySnapshot] =
+    useState<TimerRecoverySnapshot | null>(initialRecoveryState.snapshot);
   // 選択中の「25分／5分」または「52分／17分」。
   const [presetId, setPresetId] = useState<TimerPresetId>("25-5");
   // 今が学習中・休憩中・次の学習待ちのどれか。
@@ -93,7 +142,9 @@ export const TimerPanel = ({
   // 音の開始に失敗したとき、画面に出すメッセージ。
   const [audioWarning, setAudioWarning] = useState("");
   // タイマーの復旧用データをブラウザへ保存できなかったときのメッセージ。
-  const [recoveryWarning, setRecoveryWarning] = useState("");
+  const [recoveryWarning, setRecoveryWarning] = useState(
+    initialRecoveryState.warning,
+  );
   // ブラウンノイズを操作する関数を、TimerPanelで使う名前に変えて取り出す。
   const {
     start: startBrownNoise,
@@ -139,19 +190,17 @@ export const TimerPanel = ({
       ? 0
       : visibleRemainingMilliseconds / phaseDurationMilliseconds;
   const hasTimerSessionStarted =
+    pendingRecoverySnapshot !== null ||
     phase !== "focus" ||
     status !== "idle" ||
     accumulatedFocusMilliseconds > 0 ||
     completedFocusCount > 0;
-  const recoveryStorageKey = createTimerRecoveryStorageKey(
-    recoveryOwnerKey,
-    isTimerTestMode,
-  );
 
   const saveCurrentRecoveryState = useCallback(() => {
     const savedAtMs = Date.now();
 
     if (
+      pendingRecoverySnapshot !== null ||
       !hasTimerSessionStarted ||
       (isRunning &&
         (phaseEndAtMs === null || savedAtMs >= phaseEndAtMs))
@@ -215,6 +264,7 @@ export const TimerPanel = ({
     phaseDurationMilliseconds,
     phaseEndAtMs,
     phaseRemainingMilliseconds,
+    pendingRecoverySnapshot,
     presetId,
     recoveryStorageKey,
     remainingAtRunStartMilliseconds,
@@ -490,6 +540,31 @@ export const TimerPanel = ({
     startOrResume();
   };
 
+  const continueRecoveredTimer = () => {
+    if (pendingRecoverySnapshot === null) return;
+
+    setPresetId(pendingRecoverySnapshot.presetId);
+    setPhase(pendingRecoverySnapshot.phase);
+    setBreakKind(pendingRecoverySnapshot.breakKind);
+    setStatus(pendingRecoverySnapshot.phase === "waiting" ? "idle" : "paused");
+    setPhaseRemainingMilliseconds(
+      pendingRecoverySnapshot.phaseRemainingMilliseconds,
+    );
+    setPhaseDurationMilliseconds(
+      pendingRecoverySnapshot.phaseDurationMilliseconds,
+    );
+    setRemainingAtRunStartMilliseconds(
+      pendingRecoverySnapshot.phaseRemainingMilliseconds,
+    );
+    setPhaseEndAtMs(null);
+    setCurrentTimeMs(Date.now());
+    setAccumulatedFocusMilliseconds(
+      pendingRecoverySnapshot.accumulatedFocusMilliseconds,
+    );
+    setCompletedFocusCount(pendingRecoverySnapshot.completedFocusCount);
+    setPendingRecoverySnapshot(null);
+  };
+
   const skipBreakAndStartFocus = () => {
     const focusDurationMilliseconds = preset.focusSeconds * 1000;
 
@@ -576,7 +651,22 @@ export const TimerPanel = ({
         ? `${phaseLabel}を再開`
         : `${phaseLabel}を開始`;
 
-  return (
+  return pendingRecoverySnapshot !== null ? (
+    <section className="welcome-card" aria-labelledby="recovery-title">
+      <p className="eyebrow">タイマーの復旧</p>
+      <h1 id="recovery-title">前回のタイマーが見つかりました</h1>
+      <p>自動再生せず、前回の残り時間から一時停止状態で再開します。</p>
+      <div className="welcome-actions">
+        <button
+          className="primary-button"
+          type="button"
+          onClick={continueRecoveredTimer}
+        >
+          前回の続きから再開
+        </button>
+      </div>
+    </section>
+  ) : (
     <section
       className={phase === "break" ? "timer-stage is-break" : "timer-stage"}
       aria-labelledby="timer-heading"

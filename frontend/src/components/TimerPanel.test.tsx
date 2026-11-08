@@ -5,6 +5,8 @@ import { TIMER_TEST_PRESETS } from '../timer/timerConfig'
 import {
   createTimerRecoveryStorageKey,
   loadTimerRecoverySnapshot,
+  saveTimerRecoverySnapshot,
+  TIMER_RECOVERY_VERSION,
 } from '../timer/timerRecovery'
 import { TimerPanel } from './TimerPanel'
 
@@ -67,6 +69,36 @@ describe('TimerPanel', () => {
 
     expect(screen.getByLabelText('学習 24:59')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '学習を一時停止' })).toBeInTheDocument()
+  })
+
+  it('保存されたタイマーを自動再生せず一時停止状態で復旧する', () => {
+    const storageKey = createTimerRecoveryStorageKey('guest', false)
+    saveTimerRecoverySnapshot(localStorage, storageKey, {
+      version: TIMER_RECOVERY_VERSION,
+      savedAtMs: Date.now(),
+      presetId: '25-5',
+      phase: 'focus',
+      breakKind: null,
+      phaseRemainingMilliseconds: 25 * 60 * 1000 - 2_000,
+      phaseDurationMilliseconds: 25 * 60 * 1000,
+      accumulatedFocusMilliseconds: 2_000,
+      completedFocusCount: 0,
+    })
+    const storedSnapshot = localStorage.getItem(storageKey)
+
+    renderTimerPanel()
+
+    expect(localStorage.getItem(storageKey)).toBe(storedSnapshot)
+    expect(
+      screen.getByRole('heading', { name: '前回のタイマーが見つかりました' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '学習を開始' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '前回の続きから再開' }))
+
+    expect(screen.getByLabelText('学習 24:58')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '学習を再開' })).toBeInTheDocument()
+    expect(audioMocks.start).not.toHaveBeenCalled()
   })
 
   it('一時停止中は時間を進めない', () => {
@@ -144,12 +176,12 @@ describe('TimerPanel', () => {
   })
 
   it('ブラウザストレージを取得できなくても警告を出してタイマーを続ける', async () => {
-    renderTimerPanel()
     const localStorageSpy = vi
       .spyOn(window, 'localStorage', 'get')
       .mockImplementation(() => {
         throw new DOMException('Storage is unavailable', 'SecurityError')
       })
+    renderTimerPanel()
 
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))

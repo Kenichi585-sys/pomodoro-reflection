@@ -1,6 +1,12 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { ApiError } from '../api/client'
+import type {
+  CreateStudyRecordInput,
+  CreateStudyRecordOptions,
+  StudyRecord,
+} from '../api/studyRecords'
 import { TIMER_TEST_PRESETS } from '../timer/timerConfig'
 import {
   createTimerRecoveryStorageKey,
@@ -23,11 +29,27 @@ const breakMusicMocks = vi.hoisted(() => ({
   setVolume: vi.fn(),
 }))
 const timerLockMock = vi.fn()
-const renderTimerPanel = (recoveryOwnerKey = 'guest') =>
+const createStudyRecordResponse = (
+  input: CreateStudyRecordInput,
+): StudyRecord => ({
+  ...input,
+  id: 1,
+  study_date: '2026-10-27',
+  created_at: input.ended_at,
+  updated_at: input.ended_at,
+})
+const renderTimerPanel = (
+  recoveryOwnerKey = 'guest',
+  onCreateStudyRecord?: (
+    input: CreateStudyRecordInput,
+    options?: CreateStudyRecordOptions,
+  ) => Promise<StudyRecord>,
+) =>
   render(
     <TimerPanel
       showStudyTime
       recoveryOwnerKey={recoveryOwnerKey}
+      onCreateStudyRecord={onCreateStudyRecord}
       onTimerNavigationLockChange={timerLockMock}
     />,
   )
@@ -71,11 +93,206 @@ describe('TimerPanel', () => {
     expect(screen.getByRole('button', { name: '学習を一時停止' })).toBeInTheDocument()
   })
 
+  it('ログイン中は終了時点までの学習時間を保存して復旧データを削除する', async () => {
+    const recoveryOwnerKey = 'user:test@example.com'
+    const storageKey = createTimerRecoveryStorageKey(recoveryOwnerKey, false)
+    const createStudyRecordMock = vi.fn(async (input: CreateStudyRecordInput) =>
+      createStudyRecordResponse(input),
+    )
+    renderTimerPanel(recoveryOwnerKey, createStudyRecordMock)
+
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+    act(() => vi.advanceTimersByTime(2_000))
+    fireEvent.click(screen.getByRole('button', { name: '学習を終了' }))
+
+    expect(
+      screen.getByRole('heading', { name: '今回の学習を終了します' }),
+    ).toBeInTheDocument()
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: '学習時間を保存して終了' }),
+      )
+    })
+
+    expect(createStudyRecordMock.mock.calls[0]?.[0]).toEqual({
+      client_uuid: expect.any(String),
+      started_at: '2026-10-27T00:00:00.000Z',
+      ended_at: '2026-10-27T00:00:02.000Z',
+      study_seconds: 2,
+      preset: '25-5',
+      focus_seconds: 25 * 60,
+      break_seconds: 5 * 60,
+      completed_focus_count: 0,
+    })
+    expect(
+      screen.getByRole('heading', { name: '学習時間を保存しました' }),
+    ).toBeInTheDocument()
+    expect(loadTimerRecoverySnapshot(localStorage, storageKey)).toEqual({
+      status: 'empty',
+    })
+  })
+
+  it('保存結果が不明な場合は同じ内容の再送だけを許可する', async () => {
+    const recoveryOwnerKey = 'user:test@example.com'
+    const storageKey = createTimerRecoveryStorageKey(recoveryOwnerKey, false)
+    let requestCount = 0
+    const createStudyRecordMock = vi.fn(
+      async (
+        input: CreateStudyRecordInput,
+        options?: CreateStudyRecordOptions,
+      ) => {
+        options?.onRequestStarted?.()
+        requestCount += 1
+        if (requestCount === 1) {
+          throw new ApiError('サーバーへ接続できません。', {}, true)
+        }
+        return createStudyRecordResponse(input)
+      },
+    )
+    const firstRender = renderTimerPanel(
+      recoveryOwnerKey,
+      createStudyRecordMock,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+    act(() => vi.advanceTimersByTime(2_000))
+    fireEvent.click(screen.getByRole('button', { name: '学習を終了' }))
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: '学習時間を保存して終了' }),
+      )
+    })
+
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      '保存結果を確認できませんでした。',
+    )
+    expect(
+      screen.getByRole('button', { name: '学習時間を保存せず終了' }),
+    ).toBeDisabled()
+    expect(
+      screen.getByRole('button', { name: 'タイマーへ戻る' }),
+    ).toBeDisabled()
+    expect(loadTimerRecoverySnapshot(localStorage, storageKey)).toMatchObject({
+      status: 'loaded',
+      snapshot: {
+        pendingStudyEnd: {
+          studySeconds: 2,
+          isOutcomeUncertain: true,
+        },
+      },
+    })
+
+    firstRender.unmount()
+    renderTimerPanel(recoveryOwnerKey, createStudyRecordMock)
+    fireEvent.click(
+      screen.getByRole('button', { name: '終了操作の続きへ進む' }),
+    )
+    expect(
+      screen.getByRole('button', { name: '学習時間を保存せず終了' }),
+    ).toBeDisabled()
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: '同じ内容で保存結果を確認' }),
+      )
+    })
+
+    expect(createStudyRecordMock).toHaveBeenCalledTimes(2)
+    expect(createStudyRecordMock.mock.calls[1]?.[0]).toEqual(
+      createStudyRecordMock.mock.calls[0]?.[0],
+    )
+    expect(
+      screen.getByRole('heading', { name: '学習時間を保存しました' }),
+    ).toBeInTheDocument()
+  })
+
+  it('区間終了直後の切り替え前でも完了回数を含めて保存する', async () => {
+    const createStudyRecordMock = vi.fn(async (input: CreateStudyRecordInput) =>
+      createStudyRecordResponse(input),
+    )
+    renderTimerPanel('user:test@example.com', createStudyRecordMock)
+
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+    vi.setSystemTime(new Date('2026-10-27T00:25:00Z'))
+    fireEvent.click(screen.getByRole('button', { name: '学習を終了' }))
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: '学習時間を保存して終了' }),
+      )
+    })
+
+    expect(createStudyRecordMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        study_seconds: 25 * 60,
+        focus_seconds: 25 * 60,
+        break_seconds: 5 * 60,
+        completed_focus_count: 1,
+      }),
+    )
+  })
+
+  it('7秒確認モードでも正式プリセットの設定値で保存する', async () => {
+    window.history.replaceState(null, '', '/?timerTest=1')
+    const createStudyRecordMock = vi.fn(async (input: CreateStudyRecordInput) =>
+      createStudyRecordResponse(input),
+    )
+    renderTimerPanel('user:test@example.com', createStudyRecordMock)
+
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+    vi.setSystemTime(new Date('2026-10-27T00:00:07Z'))
+    fireEvent.click(screen.getByRole('button', { name: '学習を終了' }))
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: '学習時間を保存して終了' }),
+      )
+    })
+
+    expect(createStudyRecordMock.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        study_seconds: 7,
+        preset: '25-5',
+        focus_seconds: 25 * 60,
+        break_seconds: 5 * 60,
+        completed_focus_count: 0,
+      }),
+    )
+  })
+
+  it('ブラウザストレージを取得できなくても保存完了画面へ進む', async () => {
+    const localStorageSpy = vi
+      .spyOn(window, 'localStorage', 'get')
+      .mockImplementation(() => {
+        throw new DOMException('Storage is unavailable', 'SecurityError')
+      })
+    const createStudyRecordMock = vi.fn(async (input: CreateStudyRecordInput) =>
+      createStudyRecordResponse(input),
+    )
+    renderTimerPanel('user:test@example.com', createStudyRecordMock)
+
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+    act(() => vi.advanceTimersByTime(1_000))
+    fireEvent.click(screen.getByRole('button', { name: '学習を終了' }))
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: '学習時間を保存して終了' }),
+      )
+    })
+
+    expect(
+      screen.getByRole('heading', { name: '学習時間を保存しました' }),
+    ).toBeInTheDocument()
+    localStorageSpy.mockRestore()
+  })
+
   it('保存されたタイマーを自動再生せず一時停止状態で復旧する', () => {
     const storageKey = createTimerRecoveryStorageKey('guest', false)
     saveTimerRecoverySnapshot(localStorage, storageKey, {
       version: TIMER_RECOVERY_VERSION,
       savedAtMs: Date.now(),
+      sessionStartedAtMs: Date.now() - 2_000,
+      clientUuid: '00000000-0000-4000-8000-000000000001',
       presetId: '25-5',
       phase: 'focus',
       breakKind: null,
@@ -83,6 +300,7 @@ describe('TimerPanel', () => {
       phaseDurationMilliseconds: 25 * 60 * 1000,
       accumulatedFocusMilliseconds: 2_000,
       completedFocusCount: 0,
+      pendingStudyEnd: null,
     })
     const storedSnapshot = localStorage.getItem(storageKey)
 
@@ -113,6 +331,29 @@ describe('TimerPanel', () => {
     expect(screen.getByRole('button', { name: '学習を再開' })).toBeInTheDocument()
   })
 
+  it('区間終了直後の切り替え前に一時停止しても休憩状態を復旧保存する', () => {
+    const recoveryOwnerKey = 'user:test@example.com'
+    const storageKey = createTimerRecoveryStorageKey(recoveryOwnerKey, false)
+    renderTimerPanel(recoveryOwnerKey)
+
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+    vi.setSystemTime(new Date('2026-10-27T00:25:00Z'))
+    fireEvent.click(screen.getByRole('button', { name: '学習を一時停止' }))
+
+    expect(
+      screen.getByRole('button', { name: '5分休憩を再開' }),
+    ).toBeInTheDocument()
+    expect(loadTimerRecoverySnapshot(localStorage, storageKey)).toMatchObject({
+      status: 'loaded',
+      snapshot: {
+        phase: 'break',
+        breakKind: 'short',
+        accumulatedFocusMilliseconds: 25 * 60 * 1000,
+        completedFocusCount: 1,
+      },
+    })
+  })
+
   it('開始時と動作中の5秒後と一時停止時に復旧用データを保存する', () => {
     const storageKey = createTimerRecoveryStorageKey('user:test@example.com', false)
     renderTimerPanel('user:test@example.com')
@@ -122,6 +363,8 @@ describe('TimerPanel', () => {
       status: 'loaded',
       snapshot: {
         savedAtMs: Date.now(),
+        sessionStartedAtMs: Date.now(),
+        clientUuid: expect.any(String),
         phaseRemainingMilliseconds: 25 * 60 * 1000,
         accumulatedFocusMilliseconds: 0,
       },

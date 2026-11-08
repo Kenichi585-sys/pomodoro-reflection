@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 
+import { ApiError } from "../api/client";
+import type {
+  CreateStudyRecordInput,
+  CreateStudyRecordOptions,
+  StudyRecord,
+} from "../api/studyRecords";
 import { useBreakMusic } from "../audio/useBreakMusic";
 import { useBrownNoise } from "../audio/useBrownNoise";
 import {
@@ -12,6 +18,7 @@ import {
 import {
   createTimerRecoveryStorageKey,
   loadTimerRecoverySnapshot,
+  removeTimerRecoverySnapshot,
   saveTimerRecoverySnapshot,
   TIMER_RECOVERY_VERSION,
   type TimerRecoverySnapshot,
@@ -24,7 +31,22 @@ type BreakKind = "short" | "long" | null;
 type TimerPanelProps = {
   showStudyTime: boolean;
   recoveryOwnerKey: string;
+  onCreateStudyRecord?: (
+    input: CreateStudyRecordInput,
+    options?: CreateStudyRecordOptions,
+  ) => Promise<StudyRecord>;
   onTimerNavigationLockChange: (locked: boolean) => void;
+};
+
+type PendingStudyEnd = {
+  endedAtMs: number;
+  studySeconds: number;
+  completedFocusCount: number;
+};
+
+type SessionCompletion = {
+  kind: "saved" | "discarded";
+  studySeconds: number;
 };
 
 const AUDIO_FADE_OUT_MILLISECONDS = 5_000;
@@ -92,6 +114,7 @@ const calculateFadedAudioVolume = (
 export const TimerPanel = ({
   showStudyTime,
   recoveryOwnerKey,
+  onCreateStudyRecord,
   onTimerNavigationLockChange,
 }: TimerPanelProps) => {
   const isTimerTestMode =
@@ -107,6 +130,14 @@ export const TimerPanel = ({
   );
   const [pendingRecoverySnapshot, setPendingRecoverySnapshot] =
     useState<TimerRecoverySnapshot | null>(initialRecoveryState.snapshot);
+  // 今回の学習を最初に開始した時刻。学習記録の開始日時に使う。
+  const [sessionStartedAtMs, setSessionStartedAtMs] = useState<number | null>(
+    null,
+  );
+  // 同じ学習記録を重複保存しないための識別子。
+  const [sessionClientUuid, setSessionClientUuid] = useState<string | null>(
+    null,
+  );
   // 選択中の「25分／5分」または「52分／17分」。
   const [presetId, setPresetId] = useState<TimerPresetId>("25-5");
   // 今が学習中・休憩中・次の学習待ちのどれか。
@@ -145,6 +176,16 @@ export const TimerPanel = ({
   const [recoveryWarning, setRecoveryWarning] = useState(
     initialRecoveryState.warning,
   );
+  const [pendingStudyEnd, setPendingStudyEnd] =
+    useState<PendingStudyEnd | null>(null);
+  const [sessionCompletion, setSessionCompletion] =
+    useState<SessionCompletion | null>(null);
+  const [isDiscardConfirmationVisible, setIsDiscardConfirmationVisible] =
+    useState(false);
+  const [isSavingStudyRecord, setIsSavingStudyRecord] = useState(false);
+  const [isStudyRecordOutcomeUncertain, setIsStudyRecordOutcomeUncertain] =
+    useState(false);
+  const [studyRecordError, setStudyRecordError] = useState("");
   // ブラウンノイズを操作する関数を、TimerPanelで使う名前に変えて取り出す。
   const {
     start: startBrownNoise,
@@ -196,12 +237,15 @@ export const TimerPanel = ({
     accumulatedFocusMilliseconds > 0 ||
     completedFocusCount > 0;
 
-  const saveCurrentRecoveryState = useCallback(() => {
+  const saveCurrentRecoveryState = useCallback(
+    (outcomeUncertainOverride?: boolean) => {
     const savedAtMs = Date.now();
 
     if (
       pendingRecoverySnapshot !== null ||
       !hasTimerSessionStarted ||
+      sessionStartedAtMs === null ||
+      sessionClientUuid === null ||
       (isRunning &&
         (phaseEndAtMs === null || savedAtMs >= phaseEndAtMs))
     ) {
@@ -225,6 +269,8 @@ export const TimerPanel = ({
     const snapshot: TimerRecoverySnapshot = {
       version: TIMER_RECOVERY_VERSION,
       savedAtMs,
+      sessionStartedAtMs,
+      clientUuid: sessionClientUuid,
       presetId,
       phase,
       breakKind,
@@ -233,6 +279,14 @@ export const TimerPanel = ({
       accumulatedFocusMilliseconds:
         accumulatedFocusMilliseconds + activeFocusMilliseconds,
       completedFocusCount,
+      pendingStudyEnd:
+        pendingStudyEnd === null
+          ? null
+          : {
+              ...pendingStudyEnd,
+              isOutcomeUncertain:
+                outcomeUncertainOverride ?? isStudyRecordOutcomeUncertain,
+            },
     };
     let didSave = false;
 
@@ -254,22 +308,28 @@ export const TimerPanel = ({
           : "タイマーの復旧用データを保存できませんでした。タイマーはそのまま利用できます。",
       );
     });
-  }, [
-    accumulatedFocusMilliseconds,
-    breakKind,
-    completedFocusCount,
-    hasTimerSessionStarted,
-    isRunning,
-    phase,
-    phaseDurationMilliseconds,
-    phaseEndAtMs,
-    phaseRemainingMilliseconds,
-    pendingRecoverySnapshot,
-    presetId,
-    recoveryStorageKey,
-    remainingAtRunStartMilliseconds,
-    timerPresets,
-  ]);
+    },
+    [
+      accumulatedFocusMilliseconds,
+      breakKind,
+      completedFocusCount,
+      hasTimerSessionStarted,
+      isRunning,
+      phase,
+      phaseDurationMilliseconds,
+      phaseEndAtMs,
+      phaseRemainingMilliseconds,
+      pendingRecoverySnapshot,
+      pendingStudyEnd,
+      presetId,
+      recoveryStorageKey,
+      remainingAtRunStartMilliseconds,
+      sessionClientUuid,
+      sessionStartedAtMs,
+      isStudyRecordOutcomeUncertain,
+      timerPresets,
+    ],
+  );
 
   useEffect(() => {
     onTimerNavigationLockChange(hasTimerSessionStarted);
@@ -480,6 +540,7 @@ export const TimerPanel = ({
   }, [playbackVolume, setBreakMusicVolume, setBrownNoiseVolume]);
 
   const startOrResume = () => {
+    const startTimeMs = Date.now();
     const phaseToStart = phase === "waiting" ? "focus" : phase;
     const focusDurationMilliseconds = preset.focusSeconds * 1000;
     const remainingAtStartMilliseconds =
@@ -487,6 +548,10 @@ export const TimerPanel = ({
         ? focusDurationMilliseconds
         : phaseRemainingMilliseconds;
 
+    if (sessionStartedAtMs === null) {
+      setSessionStartedAtMs(startTimeMs);
+      setSessionClientUuid(window.crypto.randomUUID());
+    }
     setPhase(phaseToStart);
     setStatus("running");
     setPhaseRemainingMilliseconds(remainingAtStartMilliseconds);
@@ -496,8 +561,8 @@ export const TimerPanel = ({
         : phaseDurationMilliseconds,
     );
     setRemainingAtRunStartMilliseconds(remainingAtStartMilliseconds);
-    setPhaseEndAtMs(Date.now() + remainingAtStartMilliseconds);
-    setCurrentTimeMs(Date.now());
+    setPhaseEndAtMs(startTimeMs + remainingAtStartMilliseconds);
+    setCurrentTimeMs(startTimeMs);
 
     const volumeAtStart = calculateFadedAudioVolume(
       volume,
@@ -507,6 +572,33 @@ export const TimerPanel = ({
     if (phaseToStart === "break" && !muted) startBreakAudio(volumeAtStart);
   };
 
+  const moveCompletedFocusToPausedBreak = (
+    finalAccumulatedFocusMilliseconds: number,
+  ) => {
+    const nextCompletedFocusCount = completedFocusCount + 1;
+    const isLongBreak =
+      preset.focusCountBeforeLongBreak !== null &&
+      nextCompletedFocusCount === preset.focusCountBeforeLongBreak;
+    const breakDurationSeconds =
+      isLongBreak && preset.longBreakSeconds !== null
+        ? preset.longBreakSeconds
+        : preset.shortBreakSeconds;
+    const breakDurationMilliseconds = breakDurationSeconds * 1000;
+
+    setAccumulatedFocusMilliseconds(finalAccumulatedFocusMilliseconds);
+    setCompletedFocusCount(nextCompletedFocusCount);
+    setPhase("break");
+    setBreakKind(isLongBreak ? "long" : "short");
+    setStatus("paused");
+    setPhaseRemainingMilliseconds(breakDurationMilliseconds);
+    setPhaseDurationMilliseconds(breakDurationMilliseconds);
+    setRemainingAtRunStartMilliseconds(breakDurationMilliseconds);
+    setPhaseEndAtMs(null);
+    stopFocusAudio();
+
+    return nextCompletedFocusCount;
+  };
+
   const pause = () => {
     const remainingAtPauseMilliseconds = calculateRemainingMilliseconds(
       phaseEndAtMs,
@@ -514,14 +606,19 @@ export const TimerPanel = ({
     );
 
     if (phase === "focus") {
-      setAccumulatedFocusMilliseconds(
-        (previousAccumulatedMilliseconds) =>
-          previousAccumulatedMilliseconds +
-          Math.max(
-            0,
-            remainingAtRunStartMilliseconds - remainingAtPauseMilliseconds,
-          ),
-      );
+      const finalAccumulatedFocusMilliseconds =
+        accumulatedFocusMilliseconds +
+        Math.max(
+          0,
+          remainingAtRunStartMilliseconds - remainingAtPauseMilliseconds,
+        );
+      if (remainingAtPauseMilliseconds === 0) {
+        moveCompletedFocusToPausedBreak(
+          finalAccumulatedFocusMilliseconds,
+        );
+        return;
+      }
+      setAccumulatedFocusMilliseconds(finalAccumulatedFocusMilliseconds);
     }
 
     setPhaseRemainingMilliseconds(remainingAtPauseMilliseconds);
@@ -530,6 +627,172 @@ export const TimerPanel = ({
     setPhaseEndAtMs(null);
     if (phase === "focus") stopFocusAudio();
     if (phase === "break") pauseBreakMusic();
+  };
+
+  const resetTimerSession = () => {
+    const focusDurationMilliseconds = preset.focusSeconds * 1000;
+
+    stopFocusAudio();
+    stopBreakMusic();
+    setPhase("focus");
+    setStatus("idle");
+    setBreakKind(null);
+    setPhaseRemainingMilliseconds(focusDurationMilliseconds);
+    setPhaseDurationMilliseconds(focusDurationMilliseconds);
+    setPhaseEndAtMs(null);
+    setRemainingAtRunStartMilliseconds(focusDurationMilliseconds);
+    setCurrentTimeMs(Date.now());
+    setCompletedFocusCount(0);
+    setAccumulatedFocusMilliseconds(0);
+    setSessionStartedAtMs(null);
+    setSessionClientUuid(null);
+    setPendingStudyEnd(null);
+    setIsDiscardConfirmationVisible(false);
+    setIsStudyRecordOutcomeUncertain(false);
+    setStudyRecordError("");
+
+    let didRemoveRecoveryState = false;
+    try {
+      didRemoveRecoveryState = removeTimerRecoverySnapshot(
+        window.localStorage,
+        recoveryStorageKey,
+      );
+    } catch {
+      didRemoveRecoveryState = false;
+    }
+    setRecoveryWarning(
+      didRemoveRecoveryState
+        ? ""
+        : "終了済みのタイマー復旧用データを削除できませんでした。",
+    );
+  };
+
+  const requestStudyEnd = () => {
+    if (sessionStartedAtMs === null || sessionClientUuid === null) return;
+
+    const endedAtMs = Date.now();
+    const remainingMilliseconds = isRunning
+      ? calculateRemainingMilliseconds(
+          phaseEndAtMs,
+          phaseRemainingMilliseconds,
+          endedAtMs,
+        )
+      : phaseRemainingMilliseconds;
+    const activeFocusMilliseconds =
+      isRunning && phase === "focus"
+        ? Math.max(
+            0,
+            remainingAtRunStartMilliseconds - remainingMilliseconds,
+          )
+        : 0;
+    const finalAccumulatedFocusMilliseconds =
+      accumulatedFocusMilliseconds + activeFocusMilliseconds;
+    const studySeconds = Math.floor(
+      finalAccumulatedFocusMilliseconds / 1000,
+    );
+    const didCompleteFocusAtEnd =
+      phase === "focus" && remainingMilliseconds === 0;
+    let completedFocusCountAtEnd = completedFocusCount;
+
+    if (phase === "focus" && !didCompleteFocusAtEnd) stopFocusAudio();
+    if (phase === "break") pauseBreakMusic();
+    setStatus("paused");
+    if (didCompleteFocusAtEnd) {
+      completedFocusCountAtEnd = moveCompletedFocusToPausedBreak(
+        finalAccumulatedFocusMilliseconds,
+      );
+    } else {
+      setPhaseRemainingMilliseconds(remainingMilliseconds);
+      setRemainingAtRunStartMilliseconds(remainingMilliseconds);
+      setPhaseEndAtMs(null);
+      setAccumulatedFocusMilliseconds(finalAccumulatedFocusMilliseconds);
+    }
+
+    if (onCreateStudyRecord === undefined) {
+      resetTimerSession();
+      return;
+    }
+
+    setPendingStudyEnd({
+      endedAtMs,
+      studySeconds,
+      completedFocusCount: completedFocusCountAtEnd,
+    });
+    setIsStudyRecordOutcomeUncertain(false);
+    setStudyRecordError("");
+  };
+
+  const saveStudyRecordAndFinish = async () => {
+    if (
+      onCreateStudyRecord === undefined ||
+      pendingStudyEnd === null ||
+      sessionStartedAtMs === null ||
+      sessionClientUuid === null
+    ) {
+      return;
+    }
+
+    setIsSavingStudyRecord(true);
+    setStudyRecordError("");
+    try {
+      const recordPreset = TIMER_PRESETS[presetId];
+      const completedFocusCountForRecord = Math.min(
+        pendingStudyEnd.completedFocusCount,
+        Math.floor(
+          pendingStudyEnd.studySeconds / recordPreset.focusSeconds,
+        ),
+      );
+      await onCreateStudyRecord(
+        {
+          client_uuid: sessionClientUuid,
+          started_at: new Date(sessionStartedAtMs).toISOString(),
+          ended_at: new Date(pendingStudyEnd.endedAtMs).toISOString(),
+          study_seconds: pendingStudyEnd.studySeconds,
+          preset: presetId,
+          focus_seconds: recordPreset.focusSeconds,
+          break_seconds: recordPreset.shortBreakSeconds,
+          completed_focus_count: completedFocusCountForRecord,
+        },
+        {
+          onRequestStarted: () => {
+            setIsStudyRecordOutcomeUncertain(true);
+            saveCurrentRecoveryState(true);
+          },
+        },
+      );
+      const savedStudySeconds = pendingStudyEnd.studySeconds;
+      resetTimerSession();
+      setSessionCompletion({
+        kind: "saved",
+        studySeconds: savedStudySeconds,
+      });
+    } catch (error) {
+      const currentAttemptOutcomeUncertain =
+        !(error instanceof ApiError) || error.isOutcomeUncertain;
+      const mustConfirmPreviousSave =
+        isStudyRecordOutcomeUncertain || currentAttemptOutcomeUncertain;
+      setIsStudyRecordOutcomeUncertain(mustConfirmPreviousSave);
+      setStudyRecordError(
+        mustConfirmPreviousSave
+          ? "保存結果を確認できませんでした。破棄せず、同じ内容で再試行してください。"
+          : error instanceof ApiError
+            ? error.message
+            : "学習時間を保存できませんでした。もう一度お試しください。",
+      );
+    } finally {
+      setIsSavingStudyRecord(false);
+    }
+  };
+
+  const discardStudySession = () => {
+    if (isStudyRecordOutcomeUncertain) return;
+
+    const discardedStudySeconds = pendingStudyEnd?.studySeconds ?? 0;
+    resetTimerSession();
+    setSessionCompletion({
+      kind: "discarded",
+      studySeconds: discardedStudySeconds,
+    });
   };
 
   const handleTimerControl = () => {
@@ -562,6 +825,21 @@ export const TimerPanel = ({
       pendingRecoverySnapshot.accumulatedFocusMilliseconds,
     );
     setCompletedFocusCount(pendingRecoverySnapshot.completedFocusCount);
+    setSessionStartedAtMs(pendingRecoverySnapshot.sessionStartedAtMs);
+    setSessionClientUuid(pendingRecoverySnapshot.clientUuid);
+    if (pendingRecoverySnapshot.pendingStudyEnd !== null) {
+      const {
+        isOutcomeUncertain,
+        ...recoveredPendingStudyEnd
+      } = pendingRecoverySnapshot.pendingStudyEnd;
+      setPendingStudyEnd(recoveredPendingStudyEnd);
+      setIsStudyRecordOutcomeUncertain(isOutcomeUncertain);
+      setStudyRecordError(
+        isOutcomeUncertain
+          ? "保存結果を確認できませんでした。破棄せず、同じ内容で再試行してください。"
+          : "",
+      );
+    }
     setPendingRecoverySnapshot(null);
   };
 
@@ -651,18 +929,124 @@ export const TimerPanel = ({
         ? `${phaseLabel}を再開`
         : `${phaseLabel}を開始`;
 
+  if (sessionCompletion !== null) {
+    return (
+      <section className="welcome-card" aria-labelledby="completion-title">
+        <p className="eyebrow">学習終了</p>
+        <h1 id="completion-title">
+          {sessionCompletion.kind === "saved"
+            ? "学習時間を保存しました"
+            : "今回は保存せず終了しました"}
+        </h1>
+        {sessionCompletion.kind === "saved" && (
+          <p>今回の学習時間: {formatStudyTime(sessionCompletion.studySeconds)}</p>
+        )}
+        <div className="welcome-actions">
+          <button
+            className="primary-button"
+            type="button"
+            onClick={() => setSessionCompletion(null)}
+          >
+            新しい学習を始める
+          </button>
+        </div>
+      </section>
+    );
+  }
+
+  if (pendingStudyEnd !== null) {
+    if (isDiscardConfirmationVisible) {
+      return (
+        <section className="welcome-card" aria-labelledby="discard-title">
+          <p className="eyebrow">保存せず終了</p>
+          <h1 id="discard-title">今回の学習時間を破棄しますか</h1>
+          <p>破棄すると、今回の学習時間は学習記録へ保存されません。</p>
+          <div className="welcome-actions">
+            <button
+              className="secondary-button"
+              type="button"
+              onClick={discardStudySession}
+            >
+              保存せず終了する
+            </button>
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => setIsDiscardConfirmationVisible(false)}
+            >
+              終了方法へ戻る
+            </button>
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="welcome-card" aria-labelledby="study-end-title">
+        <p className="eyebrow">学習終了</p>
+        <h1 id="study-end-title">今回の学習を終了します</h1>
+        <p>今回の学習時間: {formatStudyTime(pendingStudyEnd.studySeconds)}</p>
+        {studyRecordError && (
+          <p className="form-error" role="alert">
+            {studyRecordError}
+          </p>
+        )}
+        <div className="welcome-actions">
+          <button
+            className="primary-button"
+            type="button"
+            disabled={isSavingStudyRecord}
+            onClick={saveStudyRecordAndFinish}
+          >
+            {isSavingStudyRecord
+              ? "学習時間を保存しています"
+              : isStudyRecordOutcomeUncertain
+                ? "同じ内容で保存結果を確認"
+              : "学習時間を保存して終了"}
+          </button>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={
+              isSavingStudyRecord || isStudyRecordOutcomeUncertain
+            }
+            onClick={() => setIsDiscardConfirmationVisible(true)}
+          >
+            学習時間を保存せず終了
+          </button>
+          <button
+            className="text-button"
+            type="button"
+            disabled={
+              isSavingStudyRecord || isStudyRecordOutcomeUncertain
+            }
+            onClick={() => setPendingStudyEnd(null)}
+          >
+            タイマーへ戻る
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return pendingRecoverySnapshot !== null ? (
     <section className="welcome-card" aria-labelledby="recovery-title">
       <p className="eyebrow">タイマーの復旧</p>
       <h1 id="recovery-title">前回のタイマーが見つかりました</h1>
-      <p>自動再生せず、前回の残り時間から一時停止状態で再開します。</p>
+      <p>
+        {pendingRecoverySnapshot.pendingStudyEnd === null
+          ? "自動再生せず、前回の残り時間から一時停止状態で再開します。"
+          : "前回の終了操作へ戻り、同じ学習記録の保存を続けます。"}
+      </p>
       <div className="welcome-actions">
         <button
           className="primary-button"
           type="button"
           onClick={continueRecoveredTimer}
         >
-          前回の続きから再開
+          {pendingRecoverySnapshot.pendingStudyEnd === null
+            ? "前回の続きから再開"
+            : "終了操作の続きへ進む"}
         </button>
       </div>
     </section>
@@ -804,6 +1188,16 @@ export const TimerPanel = ({
               }
             />
           </div>
+
+          {hasTimerSessionStarted && (
+            <button
+              className="text-button"
+              type="button"
+              onClick={requestStudyEnd}
+            >
+              学習を終了
+            </button>
+          )}
 
           {audioWarning && (
             <p className="timer-warning" role="status">

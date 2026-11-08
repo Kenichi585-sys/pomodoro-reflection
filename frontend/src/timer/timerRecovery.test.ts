@@ -11,8 +11,10 @@ import {
 const STORAGE_KEY = 'pomodoro-reflection:test-timer-recovery'
 
 const snapshot: TimerRecoverySnapshot = {
-  version: 1,
+  version: 2,
   savedAtMs: 1_700_000_000_000,
+  sessionStartedAtMs: 1_699_999_700_000,
+  clientUuid: '00000000-0000-4000-8000-000000000001',
   presetId: '25-5',
   phase: 'focus',
   breakKind: null,
@@ -20,6 +22,7 @@ const snapshot: TimerRecoverySnapshot = {
   phaseDurationMilliseconds: 25 * 60 * 1000,
   accumulatedFocusMilliseconds: 5 * 60 * 1000,
   completedFocusCount: 0,
+  pendingStudyEnd: null,
 }
 
 const unavailableStorage = {
@@ -56,7 +59,7 @@ describe('timerRecovery', () => {
     localStorage.setItem(STORAGE_KEY, '{invalid json')
     expect(loadTimerRecoverySnapshot(localStorage, STORAGE_KEY)).toEqual({ status: 'invalid' })
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...snapshot, version: 2 }))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...snapshot, version: 3 }))
     expect(loadTimerRecoverySnapshot(localStorage, STORAGE_KEY)).toEqual({ status: 'invalid' })
   })
 

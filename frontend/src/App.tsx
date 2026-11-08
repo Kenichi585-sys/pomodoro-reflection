@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 
 import {
-  AuthApiError,
   getSession,
   loginAccount,
   logoutAccount,
   registerAccount,
   type AuthUser,
 } from "./api/auth";
+import { ApiError } from "./api/client";
+import { createStudyRecord } from "./api/studyRecords";
 import { AuthForm, type AuthFormMode } from "./components/AuthForm";
 import { TimerPanel } from "./components/TimerPanel";
 import "./App.css";
@@ -37,7 +38,7 @@ const App = () => {
       .catch((error: unknown) => {
         if (!isSessionRequestActive) return;
         setStartupError(
-          error instanceof AuthApiError
+          error instanceof ApiError
             ? error.message
             : "ログイン状態を確認できませんでした。",
         );
@@ -69,7 +70,7 @@ const App = () => {
       setScreen("welcome");
     } catch (error) {
       setStartupError(
-        error instanceof AuthApiError
+        error instanceof ApiError
           ? error.message
           : "ログアウトできませんでした。",
       );
@@ -204,6 +205,7 @@ const App = () => {
             <TimerPanel
               showStudyTime={user !== null}
               recoveryOwnerKey={user ? `user:${user.email}` : "guest"}
+              onCreateStudyRecord={user ? createStudyRecord : undefined}
               onTimerNavigationLockChange={setIsTimerNavigationLocked}
             />
             {startupError && (

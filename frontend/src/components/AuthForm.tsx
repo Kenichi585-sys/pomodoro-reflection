@@ -1,6 +1,7 @@
 import { useState, type SubmitEvent } from "react";
 
-import { AuthApiError, type AuthUser } from "../api/auth";
+import { type AuthUser } from "../api/auth";
+import { ApiError } from "../api/client";
 
 export type AuthFormMode = "login" | "register";
 
@@ -50,7 +51,7 @@ export const AuthForm = ({
         : await onLogin({ email, password });
       onSuccess(authenticatedUser);
     } catch (error) {
-      if (error instanceof AuthApiError) {
+      if (error instanceof ApiError) {
         setFieldErrors(error.fieldErrors);
         setFormError(
           getFirstFieldError(error.fieldErrors, "non_field_errors") ?? error.message,

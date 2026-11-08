@@ -8,7 +8,6 @@ export type CreateStudyRecordInput = {
   preset: "25-5" | "52-17";
   focus_seconds: number;
   break_seconds: number;
-  completed_focus_count: number;
 };
 
 export type StudyRecord = CreateStudyRecordInput & {

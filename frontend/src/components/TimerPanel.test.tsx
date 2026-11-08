@@ -123,7 +123,6 @@ describe('TimerPanel', () => {
       preset: '25-5',
       focus_seconds: 25 * 60,
       break_seconds: 5 * 60,
-      completed_focus_count: 0,
     })
     expect(
       screen.getByRole('heading', { name: '学習時間を保存しました' }),
@@ -208,7 +207,7 @@ describe('TimerPanel', () => {
     ).toBeInTheDocument()
   })
 
-  it('区間終了直後の切り替え前でも完了回数を含めて保存する', async () => {
+  it('区間終了直後の切り替え前でも満額の学習時間を保存する', async () => {
     const createStudyRecordMock = vi.fn(async (input: CreateStudyRecordInput) =>
       createStudyRecordResponse(input),
     )
@@ -228,7 +227,6 @@ describe('TimerPanel', () => {
         study_seconds: 25 * 60,
         focus_seconds: 25 * 60,
         break_seconds: 5 * 60,
-        completed_focus_count: 1,
       }),
     )
   })
@@ -255,7 +253,6 @@ describe('TimerPanel', () => {
         preset: '25-5',
         focus_seconds: 25 * 60,
         break_seconds: 5 * 60,
-        completed_focus_count: 0,
       }),
     )
   })

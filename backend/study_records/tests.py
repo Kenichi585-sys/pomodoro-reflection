@@ -37,7 +37,6 @@ class StudyRecordModelTests(TestCase):
             "preset": StudyRecord.Preset.POMODORO,
             "focus_seconds": 25 * 60,
             "break_seconds": 5 * 60,
-            "completed_focus_count": 1,
         }
         values.update(overrides)
         return StudyRecord(**values)
@@ -131,7 +130,6 @@ class StudyRecordCreateApiTests(TestCase):
             "preset": StudyRecord.Preset.POMODORO,
             "focus_seconds": 25 * 60,
             "break_seconds": 5 * 60,
-            "completed_focus_count": 1,
         }
 
     def test_authenticated_user_can_create_record_without_duplication(self):
@@ -176,8 +174,7 @@ class StudyRecordCreateApiTests(TestCase):
             {
                 **self.payload,
                 "client_uuid": str(uuid.uuid4()),
-                "study_seconds": 1,
-                "completed_focus_count": 4,
+                "study_seconds": 25 * 60 + 1,
             },
             format="json",
             HTTP_X_CSRFTOKEN=csrf_token,

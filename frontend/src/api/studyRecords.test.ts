@@ -13,7 +13,6 @@ const input: CreateStudyRecordInput = {
   preset: "25-5",
   focus_seconds: 25 * 60,
   break_seconds: 5 * 60,
-  completed_focus_count: 0,
 };
 
 const jsonResponse = (body: object, status = 200) =>

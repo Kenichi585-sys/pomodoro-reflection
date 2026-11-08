@@ -70,7 +70,6 @@ class StudyRecord(models.Model):
     preset = models.CharField("プリセット", max_length=5, choices=Preset.choices)
     focus_seconds = models.PositiveIntegerField("設定学習秒数")
     break_seconds = models.PositiveIntegerField("設定休憩秒数")
-    completed_focus_count = models.PositiveIntegerField("完了した学習回数")
     created_at = models.DateTimeField("作成日時", auto_now_add=True)
     updated_at = models.DateTimeField("更新日時", auto_now=True)
 

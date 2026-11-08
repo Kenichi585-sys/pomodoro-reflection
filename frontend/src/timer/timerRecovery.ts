@@ -12,7 +12,6 @@ export type TimerRecoveryBreakKind = 'short' | 'long' | null
 export type TimerRecoveryPendingStudyEnd = {
   endedAtMs: number
   studySeconds: number
-  completedFocusCount: number
   isOutcomeUncertain: boolean
 }
 
@@ -81,7 +80,6 @@ const isPendingStudyEnd = (
   const {
     endedAtMs,
     studySeconds,
-    completedFocusCount,
     isOutcomeUncertain,
   } = value
   return (
@@ -90,7 +88,6 @@ const isPendingStudyEnd = (
     endedAtMs <= savedAtMs &&
     isNonNegativeSafeNumber(studySeconds) &&
     studySeconds <= Math.floor((endedAtMs - sessionStartedAtMs) / 1000) &&
-    isNonNegativeSafeNumber(completedFocusCount) &&
     typeof isOutcomeUncertain === 'boolean'
   )
 }

@@ -23,7 +23,6 @@ class StudyRecordSerializer(serializers.ModelSerializer):
             "preset",
             "focus_seconds",
             "break_seconds",
-            "completed_focus_count",
             "created_at",
             "updated_at",
         )
@@ -57,15 +56,6 @@ class StudyRecordSerializer(serializers.ModelSerializer):
             duration_errors["break_seconds"] = "プリセットの休憩時間と一致しません。"
         if duration_errors:
             raise serializers.ValidationError(duration_errors)
-
-        if attrs["completed_focus_count"] * attrs["focus_seconds"] > study_seconds:
-            raise serializers.ValidationError(
-                {
-                    "completed_focus_count": (
-                        "完了回数に必要な学習時間が記録されていません。"
-                    )
-                }
-            )
 
         return attrs
 

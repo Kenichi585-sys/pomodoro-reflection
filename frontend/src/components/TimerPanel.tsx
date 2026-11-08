@@ -41,7 +41,6 @@ type TimerPanelProps = {
 type PendingStudyEnd = {
   endedAtMs: number;
   studySeconds: number;
-  completedFocusCount: number;
 };
 
 type SessionCompletion = {
@@ -596,7 +595,6 @@ export const TimerPanel = ({
     setPhaseEndAtMs(null);
     stopFocusAudio();
 
-    return nextCompletedFocusCount;
   };
 
   const pause = () => {
@@ -692,15 +690,11 @@ export const TimerPanel = ({
     );
     const didCompleteFocusAtEnd =
       phase === "focus" && remainingMilliseconds === 0;
-    let completedFocusCountAtEnd = completedFocusCount;
-
     if (phase === "focus" && !didCompleteFocusAtEnd) stopFocusAudio();
     if (phase === "break") pauseBreakMusic();
     setStatus("paused");
     if (didCompleteFocusAtEnd) {
-      completedFocusCountAtEnd = moveCompletedFocusToPausedBreak(
-        finalAccumulatedFocusMilliseconds,
-      );
+      moveCompletedFocusToPausedBreak(finalAccumulatedFocusMilliseconds);
     } else {
       setPhaseRemainingMilliseconds(remainingMilliseconds);
       setRemainingAtRunStartMilliseconds(remainingMilliseconds);
@@ -716,7 +710,6 @@ export const TimerPanel = ({
     setPendingStudyEnd({
       endedAtMs,
       studySeconds,
-      completedFocusCount: completedFocusCountAtEnd,
     });
     setIsStudyRecordOutcomeUncertain(false);
     setStudyRecordError("");
@@ -736,12 +729,6 @@ export const TimerPanel = ({
     setStudyRecordError("");
     try {
       const recordPreset = TIMER_PRESETS[presetId];
-      const completedFocusCountForRecord = Math.min(
-        pendingStudyEnd.completedFocusCount,
-        Math.floor(
-          pendingStudyEnd.studySeconds / recordPreset.focusSeconds,
-        ),
-      );
       await onCreateStudyRecord(
         {
           client_uuid: sessionClientUuid,
@@ -751,7 +738,6 @@ export const TimerPanel = ({
           preset: presetId,
           focus_seconds: recordPreset.focusSeconds,
           break_seconds: recordPreset.shortBreakSeconds,
-          completed_focus_count: completedFocusCountForRecord,
         },
         {
           onRequestStarted: () => {

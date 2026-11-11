@@ -728,16 +728,12 @@ export const TimerPanel = ({
     setIsSavingStudyRecord(true);
     setStudyRecordError("");
     try {
-      const recordPreset = TIMER_PRESETS[presetId];
       await onCreateStudyRecord(
         {
           client_uuid: sessionClientUuid,
           started_at: new Date(sessionStartedAtMs).toISOString(),
           ended_at: new Date(pendingStudyEnd.endedAtMs).toISOString(),
           study_seconds: pendingStudyEnd.studySeconds,
-          preset: presetId,
-          focus_seconds: recordPreset.focusSeconds,
-          break_seconds: recordPreset.shortBreakSeconds,
         },
         {
           onRequestStarted: () => {

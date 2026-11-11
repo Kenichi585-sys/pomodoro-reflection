@@ -10,9 +10,6 @@ const input: CreateStudyRecordInput = {
   started_at: "2026-10-27T00:00:00.000Z",
   ended_at: "2026-10-27T00:00:02.000Z",
   study_seconds: 2,
-  preset: "25-5",
-  focus_seconds: 25 * 60,
-  break_seconds: 5 * 60,
 };
 
 const jsonResponse = (body: object, status = 200) =>

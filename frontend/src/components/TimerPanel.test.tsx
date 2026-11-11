@@ -120,9 +120,6 @@ describe('TimerPanel', () => {
       started_at: '2026-10-27T00:00:00.000Z',
       ended_at: '2026-10-27T00:00:02.000Z',
       study_seconds: 2,
-      preset: '25-5',
-      focus_seconds: 25 * 60,
-      break_seconds: 5 * 60,
     })
     expect(
       screen.getByRole('heading', { name: '学習時間を保存しました' }),
@@ -225,13 +222,11 @@ describe('TimerPanel', () => {
     expect(createStudyRecordMock.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         study_seconds: 25 * 60,
-        focus_seconds: 25 * 60,
-        break_seconds: 5 * 60,
       }),
     )
   })
 
-  it('7秒確認モードでも正式プリセットの設定値で保存する', async () => {
+  it('7秒確認モードでは実際に学習した秒数を保存する', async () => {
     window.history.replaceState(null, '', '/?timerTest=1')
     const createStudyRecordMock = vi.fn(async (input: CreateStudyRecordInput) =>
       createStudyRecordResponse(input),
@@ -250,9 +245,6 @@ describe('TimerPanel', () => {
     expect(createStudyRecordMock.mock.calls[0]?.[0]).toEqual(
       expect.objectContaining({
         study_seconds: 7,
-        preset: '25-5',
-        focus_seconds: 25 * 60,
-        break_seconds: 5 * 60,
       }),
     )
   })

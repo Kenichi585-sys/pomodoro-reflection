@@ -48,10 +48,6 @@ class StudyTheme(models.Model):
 
 
 class StudyRecord(models.Model):
-    class Preset(models.TextChoices):
-        POMODORO = "25-5", "25分 / 5分"
-        FIFTY_TWO_SEVENTEEN = "52-17", "52分 / 17分"
-
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -67,9 +63,6 @@ class StudyRecord(models.Model):
     started_at = models.DateTimeField("開始日時")
     ended_at = models.DateTimeField("終了日時")
     study_seconds = models.PositiveIntegerField("学習秒数")
-    preset = models.CharField("プリセット", max_length=5, choices=Preset.choices)
-    focus_seconds = models.PositiveIntegerField("設定学習秒数")
-    break_seconds = models.PositiveIntegerField("設定休憩秒数")
     created_at = models.DateTimeField("作成日時", auto_now_add=True)
     updated_at = models.DateTimeField("更新日時", auto_now=True)
 

@@ -5,9 +5,6 @@ export type CreateStudyRecordInput = {
   started_at: string;
   ended_at: string;
   study_seconds: number;
-  preset: "25-5" | "52-17";
-  focus_seconds: number;
-  break_seconds: number;
 };
 
 export type StudyRecord = CreateStudyRecordInput & {

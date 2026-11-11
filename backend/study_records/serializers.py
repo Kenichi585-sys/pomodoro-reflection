@@ -4,12 +4,6 @@ from rest_framework import serializers
 from .models import StudyRecord
 
 
-PRESET_DURATIONS = {
-    StudyRecord.Preset.POMODORO: (25 * 60, 5 * 60),
-    StudyRecord.Preset.FIFTY_TWO_SEVENTEEN: (52 * 60, 17 * 60),
-}
-
-
 class StudyRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudyRecord
@@ -20,9 +14,6 @@ class StudyRecordSerializer(serializers.ModelSerializer):
             "started_at",
             "ended_at",
             "study_seconds",
-            "preset",
-            "focus_seconds",
-            "break_seconds",
             "created_at",
             "updated_at",
         )
@@ -45,17 +36,6 @@ class StudyRecordSerializer(serializers.ModelSerializer):
                     )
                 }
             )
-
-        expected_focus_seconds, expected_break_seconds = PRESET_DURATIONS[
-            attrs["preset"]
-        ]
-        duration_errors = {}
-        if attrs["focus_seconds"] != expected_focus_seconds:
-            duration_errors["focus_seconds"] = "プリセットの学習時間と一致しません。"
-        if attrs["break_seconds"] != expected_break_seconds:
-            duration_errors["break_seconds"] = "プリセットの休憩時間と一致しません。"
-        if duration_errors:
-            raise serializers.ValidationError(duration_errors)
 
         return attrs
 

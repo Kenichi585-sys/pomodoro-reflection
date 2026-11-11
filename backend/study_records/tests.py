@@ -34,9 +34,6 @@ class StudyRecordModelTests(TestCase):
             "started_at": started_at,
             "ended_at": started_at + timedelta(minutes=25),
             "study_seconds": 25 * 60,
-            "preset": StudyRecord.Preset.POMODORO,
-            "focus_seconds": 25 * 60,
-            "break_seconds": 5 * 60,
         }
         values.update(overrides)
         return StudyRecord(**values)
@@ -127,9 +124,6 @@ class StudyRecordCreateApiTests(TestCase):
             "started_at": self.started_at.isoformat(),
             "ended_at": (self.started_at + timedelta(minutes=25)).isoformat(),
             "study_seconds": 25 * 60,
-            "preset": StudyRecord.Preset.POMODORO,
-            "focus_seconds": 25 * 60,
-            "break_seconds": 5 * 60,
         }
 
     def test_authenticated_user_can_create_record_without_duplication(self):

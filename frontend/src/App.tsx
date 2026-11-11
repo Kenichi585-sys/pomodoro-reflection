@@ -8,12 +8,25 @@ import {
   type AuthUser,
 } from "./api/auth";
 import { ApiError } from "./api/client";
-import { createStudyRecord } from "./api/studyRecords";
+import {
+  createReflection,
+  updateReflection,
+  type Reflection,
+} from "./api/reflections";
+import { createStudyRecord, type StudyRecord } from "./api/studyRecords";
 import { AuthForm, type AuthFormMode } from "./components/AuthForm";
+import { ReflectionForm } from "./components/ReflectionForm";
+import { StudyRecordDetail } from "./components/StudyRecordDetail";
 import { TimerPanel } from "./components/TimerPanel";
 import "./App.css";
 
-type Screen = "loading" | "welcome" | "timer" | AuthFormMode;
+type Screen =
+  | "loading"
+  | "welcome"
+  | "timer"
+  | "reflection"
+  | "reflection-detail"
+  | AuthFormMode;
 
 const GUEST_CHOICE_KEY = "pomodoro-reflection:guest-choice";
 
@@ -23,6 +36,11 @@ const App = () => {
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isTimerNavigationLocked, setIsTimerNavigationLocked] = useState(false);
   const [startupError, setStartupError] = useState("");
+  const [reflectionStudyRecord, setReflectionStudyRecord] =
+    useState<StudyRecord | null>(null);
+  const [savedReflection, setSavedReflection] = useState<Reflection | null>(
+    null,
+  );
 
   useEffect(() => {
     let isSessionRequestActive = true;
@@ -75,6 +93,31 @@ const App = () => {
           : "ログアウトできませんでした。",
       );
     }
+  };
+
+  const startReflection = (studyRecord: StudyRecord) => {
+    setReflectionStudyRecord(studyRecord);
+    setSavedReflection(null);
+    setScreen("reflection");
+  };
+
+  const finishReflection = (reflection: Reflection) => {
+    setSavedReflection(reflection);
+    setScreen("reflection-detail");
+  };
+
+  const returnToNewTimer = () => {
+    setReflectionStudyRecord(null);
+    setSavedReflection(null);
+    setScreen("timer");
+  };
+
+  const cancelReflection = () => {
+    if (savedReflection !== null) {
+      setScreen("reflection-detail");
+      return;
+    }
+    returnToNewTimer();
   };
 
   const isTimerVisible = screen === "timer";
@@ -206,6 +249,7 @@ const App = () => {
               showStudyTime={user !== null}
               recoveryOwnerKey={user ? `user:${user.email}` : "guest"}
               onCreateStudyRecord={user ? createStudyRecord : undefined}
+              onStartReflection={user ? startReflection : undefined}
               onTimerNavigationLockChange={setIsTimerNavigationLocked}
             />
             {startupError && (
@@ -215,6 +259,31 @@ const App = () => {
             )}
           </>
         )}
+
+        {screen === "reflection" && reflectionStudyRecord !== null && (
+          <ReflectionForm
+            studyRecord={reflectionStudyRecord}
+            initialReflection={savedReflection ?? undefined}
+            onSubmit={(input) =>
+              savedReflection === null
+                ? createReflection(reflectionStudyRecord.id, input)
+                : updateReflection(reflectionStudyRecord.id, input)
+            }
+            onSaved={finishReflection}
+            onCancel={cancelReflection}
+          />
+        )}
+
+        {screen === "reflection-detail" &&
+          reflectionStudyRecord !== null &&
+          savedReflection !== null && (
+            <StudyRecordDetail
+              studyRecord={reflectionStudyRecord}
+              reflection={savedReflection}
+              onEditReflection={() => setScreen("reflection")}
+              onStartNewStudy={returnToNewTimer}
+            />
+          )}
       </main>
     </div>
   );

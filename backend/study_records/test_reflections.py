@@ -144,7 +144,22 @@ class ReflectionApiTests(TestCase):
                 self.assertIn(error_field, response.json()["errors"])
         self.assertFalse(Reflection.objects.exists())
 
-    def test_cannot_create_duplicate_or_access_another_users_record(self):
+    def test_replaying_same_reflection_returns_saved_reflection(self):
+        payload = {
+            "worked_on": "APIを読んだ",
+            "next_action": "同じ内容を説明する",
+            "deep_dives": [{"content": "短い例を作る"}],
+        }
+        first_response = self.post(payload)
+        replay_response = self.post(payload)
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(replay_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(replay_response.json()["id"], first_response.json()["id"])
+        self.assertEqual(Reflection.objects.count(), 1)
+        self.assertEqual(ReflectionDeepDive.objects.count(), 1)
+
+    def test_cannot_overwrite_existing_reflection_or_access_another_users_record(self):
         first_response = self.post({"worked_on": "APIを読んだ"})
         duplicate_response = self.post({"worked_on": "もう一件作る"})
 
@@ -162,6 +177,6 @@ class ReflectionApiTests(TestCase):
         )
 
         self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
-        self.assertEqual(duplicate_response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(duplicate_response.status_code, status.HTTP_409_CONFLICT)
         self.assertEqual(forbidden_response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(Reflection.objects.count(), 1)

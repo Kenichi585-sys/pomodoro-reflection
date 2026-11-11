@@ -176,6 +176,7 @@ describe('TimerPanel', () => {
         pendingStudyEnd: {
           studySeconds: 2,
           isOutcomeUncertain: true,
+          saveDestination: 'finish',
         },
       },
     })

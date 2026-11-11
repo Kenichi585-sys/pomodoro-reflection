@@ -35,6 +35,7 @@ type TimerPanelProps = {
     input: CreateStudyRecordInput,
     options?: CreateStudyRecordOptions,
   ) => Promise<StudyRecord>;
+  onStartReflection?: (studyRecord: StudyRecord) => void;
   onTimerNavigationLockChange: (locked: boolean) => void;
 };
 
@@ -114,6 +115,7 @@ export const TimerPanel = ({
   showStudyTime,
   recoveryOwnerKey,
   onCreateStudyRecord,
+  onStartReflection,
   onTimerNavigationLockChange,
 }: TimerPanelProps) => {
   const isTimerTestMode =
@@ -182,6 +184,9 @@ export const TimerPanel = ({
   const [isDiscardConfirmationVisible, setIsDiscardConfirmationVisible] =
     useState(false);
   const [isSavingStudyRecord, setIsSavingStudyRecord] = useState(false);
+  const [studyRecordSaveDestination, setStudyRecordSaveDestination] = useState<
+    "reflection" | "finish" | null
+  >(null);
   const [isStudyRecordOutcomeUncertain, setIsStudyRecordOutcomeUncertain] =
     useState(false);
   const [studyRecordError, setStudyRecordError] = useState("");
@@ -237,7 +242,10 @@ export const TimerPanel = ({
     completedFocusCount > 0;
 
   const saveCurrentRecoveryState = useCallback(
-    (outcomeUncertainOverride?: boolean) => {
+    (
+      outcomeUncertainOverride?: boolean,
+      saveDestinationOverride?: "reflection" | "finish" | null,
+    ) => {
     const savedAtMs = Date.now();
 
     if (
@@ -285,6 +293,8 @@ export const TimerPanel = ({
               ...pendingStudyEnd,
               isOutcomeUncertain:
                 outcomeUncertainOverride ?? isStudyRecordOutcomeUncertain,
+              saveDestination:
+                saveDestinationOverride ?? studyRecordSaveDestination,
             },
     };
     let didSave = false;
@@ -326,6 +336,7 @@ export const TimerPanel = ({
       sessionClientUuid,
       sessionStartedAtMs,
       isStudyRecordOutcomeUncertain,
+      studyRecordSaveDestination,
       timerPresets,
     ],
   );
@@ -715,7 +726,9 @@ export const TimerPanel = ({
     setStudyRecordError("");
   };
 
-  const saveStudyRecordAndFinish = async () => {
+  const saveStudyRecordAndFinish = async (
+    destination: "reflection" | "finish",
+  ) => {
     if (
       onCreateStudyRecord === undefined ||
       pendingStudyEnd === null ||
@@ -725,10 +738,11 @@ export const TimerPanel = ({
       return;
     }
 
+    setStudyRecordSaveDestination(destination);
     setIsSavingStudyRecord(true);
     setStudyRecordError("");
     try {
-      await onCreateStudyRecord(
+      const studyRecord = await onCreateStudyRecord(
         {
           client_uuid: sessionClientUuid,
           started_at: new Date(sessionStartedAtMs).toISOString(),
@@ -738,12 +752,17 @@ export const TimerPanel = ({
         {
           onRequestStarted: () => {
             setIsStudyRecordOutcomeUncertain(true);
-            saveCurrentRecoveryState(true);
+            saveCurrentRecoveryState(true, destination);
           },
         },
       );
       const savedStudySeconds = pendingStudyEnd.studySeconds;
       resetTimerSession();
+      setStudyRecordSaveDestination(null);
+      if (destination === "reflection" && onStartReflection !== undefined) {
+        onStartReflection(studyRecord);
+        return;
+      }
       setSessionCompletion({
         kind: "saved",
         studySeconds: savedStudySeconds,
@@ -761,6 +780,7 @@ export const TimerPanel = ({
             ? error.message
             : "学習時間を保存できませんでした。もう一度お試しください。",
       );
+      if (!mustConfirmPreviousSave) setStudyRecordSaveDestination(null);
     } finally {
       setIsSavingStudyRecord(false);
     }
@@ -812,10 +832,12 @@ export const TimerPanel = ({
     if (pendingRecoverySnapshot.pendingStudyEnd !== null) {
       const {
         isOutcomeUncertain,
+        saveDestination,
         ...recoveredPendingStudyEnd
       } = pendingRecoverySnapshot.pendingStudyEnd;
       setPendingStudyEnd(recoveredPendingStudyEnd);
       setIsStudyRecordOutcomeUncertain(isOutcomeUncertain);
+      setStudyRecordSaveDestination(saveDestination);
       setStudyRecordError(
         isOutcomeUncertain
           ? "保存結果を確認できませんでした。破棄せず、同じ内容で再試行してください。"
@@ -977,14 +999,36 @@ export const TimerPanel = ({
           <button
             className="primary-button"
             type="button"
-            disabled={isSavingStudyRecord}
-            onClick={saveStudyRecordAndFinish}
+            disabled={
+              isSavingStudyRecord ||
+              (isStudyRecordOutcomeUncertain &&
+                studyRecordSaveDestination === "finish")
+            }
+            onClick={() => saveStudyRecordAndFinish("reflection")}
           >
-            {isSavingStudyRecord
+            {isSavingStudyRecord && studyRecordSaveDestination === "reflection"
               ? "学習時間を保存しています"
-              : isStudyRecordOutcomeUncertain
+              : isStudyRecordOutcomeUncertain &&
+                  studyRecordSaveDestination === "reflection"
                 ? "同じ内容で保存結果を確認"
-              : "学習時間を保存して終了"}
+                : "学習時間を保存して振り返る"}
+          </button>
+          <button
+            className="secondary-button"
+            type="button"
+            disabled={
+              isSavingStudyRecord ||
+              (isStudyRecordOutcomeUncertain &&
+                studyRecordSaveDestination === "reflection")
+            }
+            onClick={() => saveStudyRecordAndFinish("finish")}
+          >
+            {isSavingStudyRecord && studyRecordSaveDestination === "finish"
+              ? "学習時間を保存しています"
+              : isStudyRecordOutcomeUncertain &&
+                  studyRecordSaveDestination === "finish"
+                ? "同じ内容で保存結果を確認"
+                : "学習時間を保存して終了"}
           </button>
           <button
             className="secondary-button"

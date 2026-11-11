@@ -88,6 +88,7 @@ export const ReflectionForm = ({
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isOutcomeUncertain, setIsOutcomeUncertain] = useState(false);
 
   const clearDifficulty = () => {
     if (
@@ -180,6 +181,7 @@ export const ReflectionForm = ({
       onSaved(reflection);
     } catch (error) {
       if (error instanceof ApiError) {
+        if (error.isOutcomeUncertain) setIsOutcomeUncertain(true);
         setFieldErrors(error.fieldErrors);
         setFormError(
           error.fieldErrors.non_field_errors?.[0] ?? error.message,
@@ -211,6 +213,10 @@ export const ReflectionForm = ({
       </p>
 
       <form onSubmit={handleSubmit}>
+        <fieldset
+          className="reflection-input-fields"
+          disabled={isSaving || isOutcomeUncertain}
+        >
         <label htmlFor="reflection-worked-on">今回取り組んだこと</label>
         <textarea
           id="reflection-worked-on"
@@ -381,6 +387,7 @@ export const ReflectionForm = ({
           />
           {fieldError("outcome_evidence")}
         </fieldset>
+        </fieldset>
 
         {formError && (
           <p className="form-error" role="alert">
@@ -389,12 +396,16 @@ export const ReflectionForm = ({
         )}
         <div className="reflection-actions">
           <button className="primary-button" type="submit" disabled={isSaving}>
-            {isSaving ? "保存しています" : "保存"}
+            {isSaving
+              ? "保存しています"
+              : isOutcomeUncertain
+                ? "同じ内容で保存結果を確認"
+                : "保存"}
           </button>
           <button
             className="secondary-button"
             type="button"
-            disabled={isSaving}
+            disabled={isSaving || isOutcomeUncertain}
             onClick={onCancel}
           >
             キャンセル

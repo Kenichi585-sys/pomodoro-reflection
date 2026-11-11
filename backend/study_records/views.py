@@ -9,6 +9,45 @@ from .models import DEFAULT_STUDY_THEME_NAME, Reflection, StudyRecord, StudyThem
 from .serializers import ReflectionSerializer, StudyRecordSerializer
 
 
+REFLECTION_VALUE_FIELDS = (
+    "worked_on",
+    "difficulty",
+    "attempted",
+    "understanding_change",
+    "next_action",
+    "ai_usage_state",
+    "ai_communication_score",
+    "ai_thinking_score",
+    "outcome_score",
+    "outcome_evidence",
+)
+
+
+def reflection_matches_input(reflection, validated_data):
+    for field_name in REFLECTION_VALUE_FIELDS:
+        model_field = Reflection._meta.get_field(field_name)
+        input_value = validated_data.get(field_name, model_field.get_default())
+        if getattr(reflection, field_name) != input_value:
+            return False
+
+    input_deep_dives = [
+        deep_dive["content"] for deep_dive in validated_data.get("deep_dives", [])
+    ]
+    saved_deep_dives = list(
+        reflection.deep_dives.order_by("display_order").values_list(
+            "content", flat=True
+        )
+    )
+    return input_deep_dives == saved_deep_dives
+
+
+def reflection_conflict_response():
+    return Response(
+        {"errors": {"non_field_errors": ["振り返りはすでに存在します。"]}},
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
 class StudyRecordCreateView(APIView):
     def post(self, request):
         serializer = StudyRecordSerializer(data=request.data)
@@ -54,20 +93,42 @@ class ReflectionView(APIView):
 
     def post(self, request, study_record_id):
         study_record = self.get_study_record(request, study_record_id)
-        if hasattr(study_record, "reflection"):
-            return Response(
-                {"errors": {"non_field_errors": ["振り返りはすでに存在します。"]}},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
         serializer = ReflectionSerializer(data=request.data)
         if not serializer.is_valid():
             return Response(
                 {"errors": serializer.errors},
                 status=status.HTTP_400_BAD_REQUEST,
             )
-        with transaction.atomic():
-            reflection = serializer.save(study_record=study_record)
+        validated_data = dict(serializer.validated_data)
+        validated_data["deep_dives"] = [
+            dict(deep_dive)
+            for deep_dive in serializer.validated_data.get("deep_dives", [])
+        ]
+
+        existing_reflection = (
+            Reflection.objects.prefetch_related("deep_dives")
+            .filter(study_record=study_record)
+            .first()
+        )
+        if existing_reflection is not None:
+            if reflection_matches_input(existing_reflection, validated_data):
+                return Response(ReflectionSerializer(existing_reflection).data)
+            return reflection_conflict_response()
+
+        try:
+            with transaction.atomic():
+                reflection = serializer.save(study_record=study_record)
+        except IntegrityError:
+            existing_reflection = (
+                Reflection.objects.prefetch_related("deep_dives")
+                .filter(study_record=study_record)
+                .first()
+            )
+            if existing_reflection is None:
+                raise
+            if reflection_matches_input(existing_reflection, validated_data):
+                return Response(ReflectionSerializer(existing_reflection).data)
+            return reflection_conflict_response()
         return Response(
             ReflectionSerializer(reflection).data,
             status=status.HTTP_201_CREATED,

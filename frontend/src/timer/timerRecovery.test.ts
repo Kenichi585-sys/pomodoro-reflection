@@ -11,7 +11,7 @@ import {
 const STORAGE_KEY = 'pomodoro-reflection:test-timer-recovery'
 
 const snapshot: TimerRecoverySnapshot = {
-  version: 2,
+  version: 3,
   savedAtMs: 1_700_000_000_000,
   sessionStartedAtMs: 1_699_999_700_000,
   clientUuid: '00000000-0000-4000-8000-000000000001',
@@ -59,7 +59,7 @@ describe('timerRecovery', () => {
     localStorage.setItem(STORAGE_KEY, '{invalid json')
     expect(loadTimerRecoverySnapshot(localStorage, STORAGE_KEY)).toEqual({ status: 'invalid' })
 
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...snapshot, version: 3 }))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...snapshot, version: 999 }))
     expect(loadTimerRecoverySnapshot(localStorage, STORAGE_KEY)).toEqual({ status: 'invalid' })
   })
 

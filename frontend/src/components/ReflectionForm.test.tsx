@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ApiError } from "../api/client";
 import type { Reflection, ReflectionInput } from "../api/reflections";
 import type { StudyRecord } from "../api/studyRecords";
 import { ReflectionForm } from "./ReflectionForm";
@@ -139,5 +140,42 @@ describe("ReflectionForm", () => {
       }),
     );
     expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("保存結果が不明な場合は入力を固定して同じ内容だけ再送する", async () => {
+    const savedReflection = reflectionResponse({ worked_on: "APIの保存経路" });
+    const onSubmit = vi
+      .fn<(input: ReflectionInput) => Promise<Reflection>>()
+      .mockRejectedValueOnce(
+        new ApiError("保存結果を確認できませんでした。", {}, true),
+      )
+      .mockResolvedValueOnce(savedReflection);
+    const onSaved = vi.fn();
+    render(
+      <ReflectionForm
+        studyRecord={studyRecord}
+        onSubmit={onSubmit}
+        onSaved={onSaved}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    const workedOn = screen.getByLabelText("今回取り組んだこと");
+    fireEvent.change(workedOn, { target: { value: "APIの保存経路" } });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "保存結果を確認できませんでした。",
+    );
+    expect(workedOn).toBeDisabled();
+    expect(screen.getByRole("button", { name: "キャンセル" })).toBeDisabled();
+
+    fireEvent.click(
+      screen.getByRole("button", { name: "同じ内容で保存結果を確認" }),
+    );
+
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(2));
+    expect(onSubmit.mock.calls[1][0]).toEqual(onSubmit.mock.calls[0][0]);
+    expect(onSaved).toHaveBeenCalledWith(savedReflection);
   });
 });

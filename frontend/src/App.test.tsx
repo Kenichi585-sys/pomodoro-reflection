@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
@@ -255,5 +261,96 @@ describe('App', () => {
       'ログアウト処理に失敗しました。',
     )
     expect(screen.getByRole('button', { name: 'アカウント' })).toBeInTheDocument()
+  })
+
+  it('学習時間を保存して振り返りを入力できる', async () => {
+    const studyRecord = {
+      id: 12,
+      client_uuid: '00000000-0000-4000-8000-000000000001',
+      study_date: '2026-11-11',
+      started_at: '2026-11-11T09:00:00+09:00',
+      ended_at: '2026-11-11T09:25:00+09:00',
+      study_seconds: 25 * 60,
+      created_at: '2026-11-11T09:25:00+09:00',
+      updated_at: '2026-11-11T09:25:00+09:00',
+    }
+    const reflection = {
+      id: 3,
+      worked_on: 'Serializerを読んだ',
+      difficulty: '',
+      attempted: '',
+      understanding_change: '',
+      next_action: '',
+      ai_usage_state: 'unanswered',
+      ai_communication_score: null,
+      ai_thinking_score: null,
+      outcome_score: null,
+      outcome_evidence: '',
+      deep_dives: [],
+      created_at: '2026-11-11T09:26:00+09:00',
+      updated_at: '2026-11-11T09:26:00+09:00',
+    }
+    const updatedReflection = {
+      ...reflection,
+      worked_on: 'Serializerを読み直した',
+      updated_at: '2026-11-11T09:30:00+09:00',
+    }
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        jsonResponse({
+          is_authenticated: true,
+          user: { email: 'User@example.com' },
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }))
+      .mockResolvedValueOnce(jsonResponse(studyRecord, 201))
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }))
+      .mockResolvedValueOnce(jsonResponse(reflection, 201))
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }))
+      .mockResolvedValueOnce(jsonResponse(updatedReflection))
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+    fireEvent.click(await screen.findByRole('button', { name: '学習を開始' }))
+    fireEvent.click(screen.getByRole('button', { name: '学習を終了' }))
+    fireEvent.click(
+      screen.getByRole('button', { name: '学習時間を保存して振り返る' }),
+    )
+
+    expect(
+      await screen.findByRole('heading', { name: '振り返り' }),
+    ).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('今回取り組んだこと'), {
+      target: { value: 'Serializerを読んだ' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    expect(
+      await screen.findByRole('heading', { name: '振り返りを保存しました' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Serializerを読んだ')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      '/api/study-records/12/reflection/',
+      expect.objectContaining({ method: 'POST' }),
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '振り返りを編集' }))
+    expect(
+      screen.getByRole('heading', { name: '振り返りを編集' }),
+    ).toBeInTheDocument()
+    fireEvent.change(screen.getByLabelText('今回取り組んだこと'), {
+      target: { value: 'Serializerを読み直した' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7))
+    expect(await screen.findByText('Serializerを読み直した')).toBeInTheDocument()
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      '/api/study-records/12/reflection/',
+      expect.objectContaining({ method: 'PATCH' }),
+    )
   })
 })

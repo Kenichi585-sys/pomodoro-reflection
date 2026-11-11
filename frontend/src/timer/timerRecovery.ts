@@ -4,7 +4,7 @@ import {
   type TimerPresetId,
 } from './timerConfig'
 
-export const TIMER_RECOVERY_VERSION = 2
+export const TIMER_RECOVERY_VERSION = 3
 const TIMER_RECOVERY_STORAGE_KEY_PREFIX = 'pomodoro-reflection:timer-recovery'
 
 export type TimerRecoveryPhase = 'focus' | 'break' | 'waiting'
@@ -13,6 +13,7 @@ export type TimerRecoveryPendingStudyEnd = {
   endedAtMs: number
   studySeconds: number
   isOutcomeUncertain: boolean
+  saveDestination: 'reflection' | 'finish' | null
 }
 
 export type TimerRecoverySnapshot = {
@@ -81,6 +82,7 @@ const isPendingStudyEnd = (
     endedAtMs,
     studySeconds,
     isOutcomeUncertain,
+    saveDestination,
   } = value
   return (
     isNonNegativeSafeNumber(endedAtMs) &&
@@ -88,7 +90,10 @@ const isPendingStudyEnd = (
     endedAtMs <= savedAtMs &&
     isNonNegativeSafeNumber(studySeconds) &&
     studySeconds <= Math.floor((endedAtMs - sessionStartedAtMs) / 1000) &&
-    typeof isOutcomeUncertain === 'boolean'
+    typeof isOutcomeUncertain === 'boolean' &&
+    (saveDestination === null ||
+      saveDestination === 'reflection' ||
+      saveDestination === 'finish')
   )
 }
 

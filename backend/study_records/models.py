@@ -128,3 +128,75 @@ class StudyRecord(models.Model):
     def save(self, *args, **kwargs):
         self.full_clean()
         return super().save(*args, **kwargs)
+
+
+class Reflection(models.Model):
+    class AiUsageState(models.TextChoices):
+        UNANSWERED = "unanswered", "未回答"
+        USED = "used", "使用"
+        UNUSED = "unused", "未使用"
+
+    study_record = models.OneToOneField(
+        StudyRecord,
+        on_delete=models.CASCADE,
+        related_name="reflection",
+    )
+    worked_on = models.TextField("今回取り組んだこと", blank=True)
+    difficulty = models.TextField("引っかかったこと", blank=True)
+    attempted = models.TextField("試したこと", blank=True)
+    understanding_change = models.TextField("理解の変化", blank=True)
+    next_action = models.TextField("次に行う具体的な行動", blank=True)
+    ai_usage_state = models.CharField(
+        "AI利用状態",
+        max_length=10,
+        choices=AiUsageState.choices,
+        default=AiUsageState.UNANSWERED,
+    )
+    ai_communication_score = models.PositiveSmallIntegerField(
+        "AIへ考えなどを伝えた度合い",
+        null=True,
+        blank=True,
+    )
+    ai_thinking_score = models.PositiveSmallIntegerField(
+        "AI利用中に自分で考えた実感",
+        null=True,
+        blank=True,
+    )
+    outcome_score = models.PositiveSmallIntegerField(
+        "成果や良い影響の実感",
+        null=True,
+        blank=True,
+    )
+    outcome_evidence = models.TextField(
+        "成果や良い影響についての具体的な出来事・変化",
+        blank=True,
+    )
+    created_at = models.DateTimeField("作成日時", auto_now_add=True)
+    updated_at = models.DateTimeField("更新日時", auto_now=True)
+
+    def __str__(self):
+        return f"{self.study_record}の振り返り"
+
+
+class ReflectionDeepDive(models.Model):
+    reflection = models.ForeignKey(
+        Reflection,
+        on_delete=models.CASCADE,
+        related_name="deep_dives",
+    )
+    content = models.TextField("内容")
+    display_order = models.PositiveIntegerField("表示順")
+    created_at = models.DateTimeField("作成日時", auto_now_add=True)
+    updated_at = models.DateTimeField("更新日時", auto_now=True)
+
+    class Meta:
+        ordering = ["display_order"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["reflection", "display_order"],
+                name="reflection_deep_dive_order_unique",
+            ),
+        ]
+
+    def __str__(self):
+        return f"{self.reflection} - {self.display_order}"

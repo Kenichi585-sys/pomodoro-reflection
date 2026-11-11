@@ -93,7 +93,8 @@ const getCsrfToken = async (): Promise<string> => {
   return response.csrf_token;
 };
 
-export const postJsonWithCsrf = async <T>(
+const writeJsonWithCsrf = async <T>(
+  method: "POST" | "PATCH",
   url: string,
   requestBody: object,
   uncertainOnServerError = false,
@@ -113,7 +114,7 @@ export const postJsonWithCsrf = async <T>(
   return requestJson<T>(
     url,
     {
-      method: "POST",
+      method,
       headers: {
         "Content-Type": "application/json",
         "X-CSRFToken": csrfToken,
@@ -123,3 +124,31 @@ export const postJsonWithCsrf = async <T>(
     uncertainOnServerError,
   );
 };
+
+export const postJsonWithCsrf = <T>(
+  url: string,
+  requestBody: object,
+  uncertainOnServerError = false,
+  onRequestStarted?: () => void,
+): Promise<T> =>
+  writeJsonWithCsrf(
+    "POST",
+    url,
+    requestBody,
+    uncertainOnServerError,
+    onRequestStarted,
+  );
+
+export const patchJsonWithCsrf = <T>(
+  url: string,
+  requestBody: object,
+  uncertainOnServerError = false,
+  onRequestStarted?: () => void,
+): Promise<T> =>
+  writeJsonWithCsrf(
+    "PATCH",
+    url,
+    requestBody,
+    uncertainOnServerError,
+    onRequestStarted,
+  );

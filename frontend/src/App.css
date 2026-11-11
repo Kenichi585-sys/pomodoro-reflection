@@ -509,6 +509,136 @@
   line-height: 1.5;
 }
 
+.main-content:has(.reflection-card) {
+  place-items: start center;
+}
+
+.reflection-card {
+  width: min(820px, 100%);
+  padding: clamp(28px, 5vw, 52px);
+  border: 1px solid #363636;
+  border-radius: 24px;
+  background: #0c0c0c;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 35%);
+}
+
+.reflection-card h1 {
+  margin: 0;
+}
+
+.reflection-study-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 12px 0 32px;
+  color: #bdbdbd;
+}
+
+.reflection-card form {
+  display: grid;
+  gap: 10px;
+}
+
+.reflection-card label {
+  margin-top: 18px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.reflection-card textarea,
+.reflection-card select {
+  width: 100%;
+  border: 1px solid #505050;
+  border-radius: 10px;
+  outline: none;
+  background: #171717;
+  color: #fff;
+}
+
+.reflection-card textarea {
+  min-height: 112px;
+  padding: 13px;
+  resize: vertical;
+  line-height: 1.65;
+}
+
+.reflection-card select {
+  min-height: 48px;
+  padding: 10px 13px;
+}
+
+.reflection-card textarea:focus,
+.reflection-card select:focus {
+  border-color: #a8dfee;
+  box-shadow: 0 0 0 3px rgb(168 223 238 / 18%);
+}
+
+.reflection-card textarea:disabled,
+.reflection-card select:disabled,
+.reflection-card button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.deep-dive-list {
+  display: grid;
+  gap: 16px;
+}
+
+.deep-dive-field {
+  display: grid;
+  gap: 10px;
+  padding-left: clamp(16px, 4vw, 40px);
+  border-left: 2px solid #343434;
+}
+
+.deep-dive-field .text-button {
+  min-height: auto;
+  justify-self: start;
+  padding: 4px 0;
+}
+
+.add-deep-dive-button {
+  justify-self: start;
+  margin-top: 6px;
+}
+
+.reflection-score-section {
+  display: grid;
+  gap: 10px;
+  margin: 34px 0 0;
+  padding: 28px;
+  border: 1px solid #363636;
+  border-radius: 18px;
+}
+
+.reflection-score-section legend {
+  padding: 0 10px;
+  font-size: 1.15rem;
+  font-weight: 750;
+}
+
+.reflection-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+@media (max-width: 620px) {
+  .reflection-card {
+    padding: 26px 20px;
+  }
+
+  .reflection-score-section {
+    padding: 22px 16px;
+  }
+
+  .reflection-actions {
+    display: grid;
+  }
+}
+
 @media (max-width: 615px) {
   .main-content:has(.timer-stage) {
     padding: 12px 18px;

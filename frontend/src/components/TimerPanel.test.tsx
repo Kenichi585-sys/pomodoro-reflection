@@ -491,7 +491,7 @@ describe('TimerPanel', () => {
     vi.setSystemTime(new Date(Date.now() + 6_750))
     await act(async () => vi.advanceTimersByTime(250))
 
-    expect(screen.getByRole('heading', { name: '7秒休憩' })).toBeInTheDocument()
+    expect(screen.getByLabelText('7秒休憩 00:07')).toBeInTheDocument()
     expect(breakMusicMocks.start.mock.calls[0]?.[0]).toBeCloseTo(0.35)
     expect(
       loadTimerRecoverySnapshot(localStorage, testStorageKey, TIMER_TEST_PRESETS),
@@ -509,7 +509,7 @@ describe('TimerPanel', () => {
     vi.setSystemTime(new Date(Date.now() + 6_750))
     await act(async () => vi.advanceTimersByTime(250))
 
-    expect(screen.getByRole('heading', { name: '次の学習を待機中' })).toBeInTheDocument()
+    expect(screen.getByLabelText('次の学習を待機中 00:07')).toBeInTheDocument()
     expect(breakMusicMocks.stop).toHaveBeenCalled()
     expect(
       loadTimerRecoverySnapshot(localStorage, testStorageKey, TIMER_TEST_PRESETS),
@@ -532,9 +532,7 @@ describe('TimerPanel', () => {
     vi.setSystemTime(new Date('2026-10-27T00:31:00Z'))
     act(() => vi.advanceTimersByTime(250))
 
-    expect(
-      screen.getByRole('heading', { name: '次の学習を待機中' }),
-    ).toBeInTheDocument()
+    expect(screen.getByLabelText('次の学習を待機中 25:00')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '学習を始める' })).toBeInTheDocument()
     expect(screen.getByText('1 / 4回')).toBeInTheDocument()
   })
@@ -553,7 +551,7 @@ describe('TimerPanel', () => {
     expect(audioMocks.resumeIfNeeded).not.toHaveBeenCalled()
     expect(audioMocks.stop).toHaveBeenCalled()
     expect(breakMusicMocks.start).toHaveBeenCalled()
-    expect(screen.getByRole('heading', { name: '5分休憩' })).toBeInTheDocument()
+    expect(screen.getByLabelText('5分休憩 05:00')).toBeInTheDocument()
   })
 
   it('フェード中に画面へ戻った場合は現在の音量でブラウンノイズを再開する', async () => {
@@ -599,10 +597,8 @@ describe('TimerPanel', () => {
       }
     }
 
-    expect(screen.getByRole('heading', { name: '15分休憩' })).toBeInTheDocument()
-    expect(screen.getByRole('heading', { name: '15分休憩' }).closest('section')).toHaveClass(
-      'is-break',
-    )
+    expect(screen.getByLabelText('15分休憩 15:00')).toBeInTheDocument()
+    expect(screen.getByLabelText('15分休憩 15:00').closest('section')).toHaveClass('is-break')
     expect(screen.getByText('4 / 4回')).toBeInTheDocument()
 
     fireEvent.click(
@@ -611,7 +607,7 @@ describe('TimerPanel', () => {
       }),
     )
 
-    expect(screen.getByRole('heading', { name: '学習' })).toBeInTheDocument()
+    expect(screen.getByLabelText('学習 25:00')).toBeInTheDocument()
     expect(screen.getByText('0 / 4回')).toBeInTheDocument()
   })
 
@@ -624,7 +620,7 @@ describe('TimerPanel', () => {
 
     expect(audioMocks.stop).toHaveBeenCalled()
     expect(breakMusicMocks.start).toHaveBeenCalledWith(0.35)
-    expect(screen.getByRole('heading', { name: '5分休憩' })).toBeInTheDocument()
+    expect(screen.getByLabelText('5分休憩 05:00')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '5分休憩を一時停止' }))
     expect(breakMusicMocks.pause).toHaveBeenCalled()
@@ -645,7 +641,7 @@ describe('TimerPanel', () => {
     await act(async () => vi.advanceTimersByTime(250))
 
     expect(breakMusicMocks.stop).toHaveBeenCalled()
-    expect(screen.getByRole('heading', { name: '次の学習を待機中' })).toBeInTheDocument()
+    expect(screen.getByLabelText('次の学習を待機中 25:00')).toBeInTheDocument()
   })
 
   it('ミュート状態で開始しても途中からブラウンノイズを開始できる', () => {

@@ -1079,7 +1079,7 @@ export const TimerPanel = ({
   ) : (
     <section
       className={phase === "break" ? "timer-stage is-break" : "timer-stage"}
-      aria-labelledby="timer-heading"
+      aria-label="タイマー"
     >
       <div className="timer-layout">
         <div className="timer-visual">
@@ -1101,10 +1101,6 @@ export const TimerPanel = ({
               </button>
             ))}
           </div>
-
-          <h1 className="timer-phase" id="timer-heading">
-            {phaseLabel}
-          </h1>
 
           <div
             className="timer-dial"

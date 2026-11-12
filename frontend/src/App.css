@@ -17,7 +17,6 @@
 }
 
 .app-shell:has(.timer-stage.is-break) .header-button,
-.app-shell:has(.timer-stage.is-break) .timer-stage .timer-phase,
 .app-shell:has(.timer-stage.is-break) .sound-controls {
   color: #07171d;
 }
@@ -320,13 +319,6 @@
   opacity: 0.72;
 }
 
-.timer-stage .timer-phase {
-  margin: 18px 0 4px;
-  color: #d8d8d8;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
 .timer-dial {
   position: relative;
   width: clamp(240px, min(42vw, calc(100vh - 205px)), 410px);
@@ -458,6 +450,7 @@
 .timer-summary dt {
   color: #a7a7a7;
   font-size: 0.82rem;
+  white-space: nowrap;
 }
 
 .timer-summary dd {
@@ -740,37 +733,41 @@
 
 @media (max-width: 615px) {
   .main-content:has(.timer-stage) {
-    padding: 12px 18px;
+    padding: 8px 18px;
   }
 
   .timer-layout {
     grid-template-columns: 1fr;
-    gap: 12px;
+    gap: 8px;
   }
 
   .timer-controls {
     max-width: 360px;
   }
 
-  .timer-stage .timer-phase {
-    margin-top: 12px;
-  }
-
   .timer-dial {
-    width: clamp(220px, min(68vw, 38vh), 330px);
+    width: clamp(210px, min(64vw, 34vh), 300px);
   }
 
   .timer-primary-button {
-    width: 128px;
-    height: 128px;
+    width: 112px;
+    height: 112px;
   }
 
   .timer-summary {
-    margin-top: 14px;
+    margin-top: 8px;
+  }
+
+  .timer-summary > div {
+    padding: 12px;
   }
 
   .sound-controls {
-    margin-top: 14px;
+    margin-top: 8px;
+  }
+
+  .break-skip-button {
+    margin-top: 8px;
   }
 }
 

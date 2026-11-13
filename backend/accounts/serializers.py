@@ -1,9 +1,20 @@
 from django.contrib.auth import get_user_model, password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
+from study_records.models import DEFAULT_STUDY_THEME_NAME, StudyTheme
 
 
 User = get_user_model()
+
+EMAIL_ERROR_MESSAGES = {
+    "required": "メールアドレスを入力してください。",
+    "blank": "メールアドレスを入力してください。",
+    "invalid": "正しい形式のメールアドレスを入力してください。",
+}
+PASSWORD_ERROR_MESSAGES = {
+    "required": "パスワードを入力してください。",
+    "blank": "パスワードを入力してください。",
+}
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -13,11 +24,16 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField(trim_whitespace=False, write_only=True)
+    email = serializers.EmailField(error_messages=EMAIL_ERROR_MESSAGES)
+    password = serializers.CharField(
+        trim_whitespace=False,
+        write_only=True,
+        error_messages=PASSWORD_ERROR_MESSAGES,
+    )
     password_confirmation = serializers.CharField(
         trim_whitespace=False,
         write_only=True,
+        error_messages=PASSWORD_ERROR_MESSAGES,
     )
 
     def validate_email(self, value):
@@ -49,9 +65,15 @@ class RegisterSerializer(serializers.Serializer):
 
     def create(self, validated_data):
         validated_data.pop("password_confirmation")
-        return User.objects.create_user(**validated_data)
+        user = User.objects.create_user(**validated_data)
+        StudyTheme.objects.create(user=user, name=DEFAULT_STUDY_THEME_NAME)
+        return user
 
 
 class LoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
-    password = serializers.CharField(trim_whitespace=False, write_only=True)
+    email = serializers.EmailField(error_messages=EMAIL_ERROR_MESSAGES)
+    password = serializers.CharField(
+        trim_whitespace=False,
+        write_only=True,
+        error_messages=PASSWORD_ERROR_MESSAGES,
+    )

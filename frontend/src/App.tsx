@@ -1,89 +1,144 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState } from "react";
 
 import {
-  AuthApiError,
   getSession,
   loginAccount,
   logoutAccount,
   registerAccount,
   type AuthUser,
-} from './api/auth'
-import { AuthForm, type AuthFormMode } from './components/AuthForm'
-import './App.css'
+} from "./api/auth";
+import { ApiError } from "./api/client";
+import {
+  createReflection,
+  deleteReflection,
+  updateReflection,
+  type Reflection,
+} from "./api/reflections";
+import {
+  createStudyRecord,
+  deleteStudyRecord,
+  getStudyHistory,
+  getTodayStudySeconds,
+  type StudyRecord,
+} from "./api/studyRecords";
+import { AuthForm, type AuthFormMode } from "./components/AuthForm";
+import { ReflectionForm } from "./components/ReflectionForm";
+import { StudyRecordDetail } from "./components/StudyRecordDetail";
+import { TimerPanel } from "./components/TimerPanel";
+import "./App.css";
 
-type Screen = 'loading' | 'welcome' | 'timer' | AuthFormMode
+type Screen =
+  | "loading"
+  | "welcome"
+  | "timer"
+  | "reflection"
+  | "reflection-detail"
+  | "reflection-skipped"
+  | AuthFormMode;
 
-const GUEST_CHOICE_KEY = 'pomodoro-reflection:guest-choice'
+const GUEST_CHOICE_KEY = "pomodoro-reflection:guest-choice";
 
-function App() {
-  const [screen, setScreen] = useState<Screen>('loading')
-  const [user, setUser] = useState<AuthUser | null>(null)
-  const [accountOpen, setAccountOpen] = useState(false)
-  const [startupError, setStartupError] = useState('')
+const App = () => {
+  const [screen, setScreen] = useState<Screen>("loading");
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isTimerNavigationLocked, setIsTimerNavigationLocked] = useState(false);
+  const [startupError, setStartupError] = useState("");
+  const [reflectionStudyRecord, setReflectionStudyRecord] =
+    useState<StudyRecord | null>(null);
+  const [savedReflection, setSavedReflection] = useState<Reflection | null>(
+    null,
+  );
 
   useEffect(() => {
-    let active = true
+    let isSessionRequestActive = true;
 
     getSession()
       .then((sessionUser) => {
-        if (!active) return
-        setUser(sessionUser)
-        const guestSelected = localStorage.getItem(GUEST_CHOICE_KEY) === 'true'
-        setScreen(sessionUser || guestSelected ? 'timer' : 'welcome')
+        if (!isSessionRequestActive) return;
+        setUser(sessionUser);
+        const isGuestModeSelected =
+          localStorage.getItem(GUEST_CHOICE_KEY) === "true";
+        setScreen(sessionUser || isGuestModeSelected ? "timer" : "welcome");
       })
       .catch((error: unknown) => {
-        if (!active) return
+        if (!isSessionRequestActive) return;
         setStartupError(
-          error instanceof AuthApiError
+          error instanceof ApiError
             ? error.message
-            : 'ログイン状態を確認できませんでした。',
-        )
-        setScreen('welcome')
-      })
+            : "ログイン状態を確認できませんでした。",
+        );
+        setScreen("welcome");
+      });
 
     return () => {
-      active = false
-    }
-  }, [])
+      isSessionRequestActive = false;
+    };
+  }, []);
 
-  function showTimerAsGuest() {
-    localStorage.setItem(GUEST_CHOICE_KEY, 'true')
-    setScreen('timer')
-  }
+  const showTimerAsGuest = () => {
+    localStorage.setItem(GUEST_CHOICE_KEY, "true");
+    setScreen("timer");
+  };
 
-  function handleAuthSuccess(authenticatedUser: AuthUser) {
-    localStorage.removeItem(GUEST_CHOICE_KEY)
-    setUser(authenticatedUser)
-    setScreen('timer')
-  }
+  const handleAuthSuccess = (authenticatedUser: AuthUser) => {
+    localStorage.removeItem(GUEST_CHOICE_KEY);
+    setUser(authenticatedUser);
+    setScreen("timer");
+  };
 
-  async function handleLogout() {
-    setStartupError('')
+  const handleLogout = async () => {
+    setStartupError("");
     try {
-      await logoutAccount()
-      setUser(null)
-      setAccountOpen(false)
-      setScreen('welcome')
+      await logoutAccount();
+      setUser(null);
+      setIsAccountMenuOpen(false);
+      setScreen("welcome");
     } catch (error) {
       setStartupError(
-        error instanceof AuthApiError
+        error instanceof ApiError
           ? error.message
-          : 'ログアウトできませんでした。',
-      )
+          : "ログアウトできませんでした。",
+      );
     }
-  }
+  };
 
-  const timerVisible = screen === 'timer'
-  const authVisible = screen === 'login' || screen === 'register'
+  const startReflection = (studyRecord: StudyRecord) => {
+    setReflectionStudyRecord(studyRecord);
+    setSavedReflection(null);
+    setScreen("reflection");
+  };
+
+  const finishReflection = (reflection: Reflection) => {
+    setSavedReflection(reflection);
+    setScreen("reflection-detail");
+  };
+
+  const returnToNewTimer = () => {
+    setReflectionStudyRecord(null);
+    setSavedReflection(null);
+    setScreen("timer");
+  };
+
+  const skipReflection = () => {
+    if (savedReflection !== null) {
+      setScreen("reflection-detail");
+      return;
+    }
+    setScreen("reflection-skipped");
+  };
+
+  const isTimerVisible = screen === "timer";
+  const isAuthVisible = screen === "login" || screen === "register";
 
   return (
     <div className="app-shell">
       <header className="app-header">
-        {authVisible ? (
+        {isAuthVisible ? (
           <button
             className="brand-button"
             type="button"
-            onClick={() => setScreen('welcome')}
+            onClick={() => setScreen("welcome")}
           >
             振り返り付きポモドーロ
           </button>
@@ -91,22 +146,27 @@ function App() {
           <span className="brand-label">振り返り付きポモドーロ</span>
         )}
 
-        {timerVisible && (
+        {isTimerVisible && (
           <nav aria-label="主要メニュー">
             {user ? (
               <div className="account-area">
                 <button
                   className="header-button"
                   type="button"
-                  aria-expanded={accountOpen}
-                  onClick={() => setAccountOpen((open) => !open)}
+                  aria-expanded={isAccountMenuOpen}
+                  disabled={isTimerNavigationLocked}
+                  onClick={() => setIsAccountMenuOpen((isOpen) => !isOpen)}
                 >
                   アカウント
                 </button>
-                {accountOpen && (
+                {isAccountMenuOpen && (
                   <div className="account-menu">
                     <p>{user.email}</p>
-                    <button type="button" onClick={handleLogout}>
+                    <button
+                      type="button"
+                      disabled={isTimerNavigationLocked}
+                      onClick={handleLogout}
+                    >
                       ログアウト
                     </button>
                   </div>
@@ -114,10 +174,20 @@ function App() {
               </div>
             ) : (
               <>
-                <button className="header-button" type="button" onClick={() => setScreen('login')}>
+                <button
+                  className="header-button"
+                  type="button"
+                  disabled={isTimerNavigationLocked}
+                  onClick={() => setScreen("login")}
+                >
                   ログイン
                 </button>
-                <button className="header-button" type="button" onClick={() => setScreen('register')}>
+                <button
+                  className="header-button"
+                  type="button"
+                  disabled={isTimerNavigationLocked}
+                  onClick={() => setScreen("register")}
+                >
                   新規登録
                 </button>
               </>
@@ -127,9 +197,11 @@ function App() {
       </header>
 
       <main className="main-content">
-        {screen === 'loading' && <p role="status">ログイン状態を確認しています</p>}
+        {screen === "loading" && (
+          <p role="status">ログイン状態を確認しています</p>
+        )}
 
-        {screen === 'welcome' && (
+        {screen === "welcome" && (
           <section className="welcome-card" aria-labelledby="welcome-title">
             <p className="eyebrow">学習の記録</p>
             <h1 id="welcome-title">学習時間と振り返りを保存できます</h1>
@@ -142,24 +214,36 @@ function App() {
               </p>
             )}
             <div className="welcome-actions">
-              <button className="primary-button" type="button" onClick={() => setScreen('login')}>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={() => setScreen("login")}
+              >
                 ログイン
               </button>
-              <button className="secondary-button" type="button" onClick={() => setScreen('register')}>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => setScreen("register")}
+              >
                 新規登録
               </button>
-              <button className="text-button" type="button" onClick={showTimerAsGuest}>
+              <button
+                className="text-button"
+                type="button"
+                onClick={showTimerAsGuest}
+              >
                 ログインせずタイマーを使う
               </button>
             </div>
           </section>
         )}
 
-        {(screen === 'login' || screen === 'register') && (
+        {(screen === "login" || screen === "register") && (
           <AuthForm
             key={screen}
             mode={screen}
-            onCancel={() => setScreen('welcome')}
+            onCancel={() => setScreen("welcome")}
             onSwitchMode={setScreen}
             onLogin={loginAccount}
             onRegister={registerAccount}
@@ -167,24 +251,79 @@ function App() {
           />
         )}
 
-        {timerVisible && (
-          <section className="timer-stage" aria-labelledby="timer-heading">
-            <p className="eyebrow">25分 / 5分</p>
-            <div className="timer-placeholder" aria-hidden="true">
-              <span>25:00</span>
-            </div>
-            <h1 id="timer-heading">認証機能の準備ができました</h1>
-            <p>タイマー機能は次の実装段階で追加します。</p>
+        {isTimerVisible && (
+          <>
+            <TimerPanel
+              showStudyTime={user !== null}
+              recoveryOwnerKey={user ? `user:${user.email}` : "guest"}
+              onCreateStudyRecord={user ? createStudyRecord : undefined}
+              loadTodayStudySeconds={user ? getTodayStudySeconds : undefined}
+              loadStudyHistory={user ? getStudyHistory : undefined}
+              deleteStudyRecord={user ? deleteStudyRecord : undefined}
+              createReflection={user ? createReflection : undefined}
+              updateReflection={user ? updateReflection : undefined}
+              deleteReflection={user ? deleteReflection : undefined}
+              onStartReflection={user ? startReflection : undefined}
+              onTimerNavigationLockChange={setIsTimerNavigationLocked}
+            />
             {startupError && (
               <p className="form-error" role="alert">
                 {startupError}
               </p>
             )}
-          </section>
+          </>
         )}
+
+        {screen === "reflection" && reflectionStudyRecord !== null && (
+          <ReflectionForm
+            studyRecord={reflectionStudyRecord}
+            initialReflection={savedReflection ?? undefined}
+            onSubmit={(input) =>
+              savedReflection === null
+                ? createReflection(reflectionStudyRecord.id, input)
+                : updateReflection(reflectionStudyRecord.id, input)
+            }
+            onSaved={finishReflection}
+            onDelete={() => deleteReflection(reflectionStudyRecord.id)}
+            onDeleted={() => {
+              setSavedReflection(null);
+              setScreen("reflection-skipped");
+            }}
+            onSkip={skipReflection}
+          />
+        )}
+
+        {screen === "reflection-skipped" &&
+          reflectionStudyRecord !== null && (
+            <section className="welcome-card" aria-labelledby="reflection-skipped-title">
+              <p className="eyebrow">学習終了</p>
+              <h1 id="reflection-skipped-title">学習時間を保存しました</h1>
+              <p>振り返りは保存していません。</p>
+              <div className="welcome-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={returnToNewTimer}
+                >
+                  新しい学習を始める
+                </button>
+              </div>
+            </section>
+          )}
+
+        {screen === "reflection-detail" &&
+          reflectionStudyRecord !== null &&
+          savedReflection !== null && (
+            <StudyRecordDetail
+              studyRecord={reflectionStudyRecord}
+              reflection={savedReflection}
+              onEditReflection={() => setScreen("reflection")}
+              onStartNewStudy={returnToNewTimer}
+            />
+          )}
       </main>
     </div>
-  )
-}
+  );
+};
 
-export default App
+export default App;

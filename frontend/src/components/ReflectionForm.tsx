@@ -1,38 +1,26 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import { ApiError } from "../api/client";
-import type {
-  AiUsageState,
-  Reflection,
-  ReflectionInput,
-  ReflectionScore,
-} from "../api/reflections";
+import type { Reflection, ReflectionInput } from "../api/reflections";
 import type { StudyRecord } from "../api/studyRecords";
 import { formatStudyTime } from "../timer/timerConfig";
 
 type ReflectionFormProps = {
-  studyRecord: StudyRecord;
+  studyRecord: Pick<
+    StudyRecord,
+    "id" | "started_at" | "ended_at" | "study_seconds" | "goal"
+  >;
   initialReflection?: Reflection;
   onSubmit: (input: ReflectionInput) => Promise<Reflection>;
   onSaved: (reflection: Reflection) => void;
-  onCancel: () => void;
+  onDelete?: () => Promise<void>;
+  onDeleted?: () => void;
+  onSkip: () => void;
 };
 
-type ScoreSelection = "" | `${ReflectionScore}`;
-type AiCommunicationSelection = ScoreSelection | "unused";
-
-const SCORE_OPTIONS: ReflectionScore[] = [
-  0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100,
-];
-
-const toScoreSelection = (
-  score: ReflectionScore | null | undefined,
-): ScoreSelection => (score === null || score === undefined ? "" : `${score}`);
-
-const toScore = (selection: ScoreSelection): ReflectionScore | null =>
-  selection === "" ? null : (Number(selection) as ReflectionScore);
-
-const formatStudyPeriod = (studyRecord: StudyRecord): string => {
+const formatStudyPeriod = (
+  studyRecord: Pick<StudyRecord, "started_at" | "ended_at">,
+): string => {
   const startedAt = new Date(studyRecord.started_at);
   const endedAt = new Date(studyRecord.ended_at);
   const date = new Intl.DateTimeFormat("ja-JP", {
@@ -52,132 +40,108 @@ export const ReflectionForm = ({
   initialReflection,
   onSubmit,
   onSaved,
-  onCancel,
+  onDelete,
+  onDeleted,
+  onSkip,
 }: ReflectionFormProps) => {
-  const initialAiCommunicationSelection: AiCommunicationSelection =
-    initialReflection?.ai_usage_state === "unused"
-      ? "unused"
-      : toScoreSelection(initialReflection?.ai_communication_score);
   const [workedOn, setWorkedOn] = useState(initialReflection?.worked_on ?? "");
-  const [difficulty, setDifficulty] = useState(
-    initialReflection?.difficulty ?? "",
-  );
-  const [attempted, setAttempted] = useState(
-    initialReflection?.attempted ?? "",
-  );
-  const [understandingChange, setUnderstandingChange] = useState(
-    initialReflection?.understanding_change ?? "",
-  );
+  const [learned, setLearned] = useState(initialReflection?.learned ?? "");
   const [nextAction, setNextAction] = useState(
     initialReflection?.next_action ?? "",
-  );
-  const [deepDives, setDeepDives] = useState<string[]>(
-    initialReflection?.deep_dives.map(({ content }) => content) ?? [],
-  );
-  const [aiCommunication, setAiCommunication] =
-    useState<AiCommunicationSelection>(initialAiCommunicationSelection);
-  const [aiThinking, setAiThinking] = useState<ScoreSelection>(
-    toScoreSelection(initialReflection?.ai_thinking_score),
-  );
-  const [outcomeScore, setOutcomeScore] = useState<ScoreSelection>(
-    toScoreSelection(initialReflection?.outcome_score),
-  );
-  const [outcomeEvidence, setOutcomeEvidence] = useState(
-    initialReflection?.outcome_evidence ?? "",
   );
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [formError, setFormError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isOutcomeUncertain, setIsOutcomeUncertain] = useState(false);
+  const [confirmationAction, setConfirmationAction] = useState<
+    "delete" | "discard" | null
+  >(null);
+  const confirmationButtonRef = useRef<HTMLButtonElement>(null);
 
-  const clearDifficulty = () => {
-    if (
-      (attempted || understandingChange) &&
-      !window.confirm("試したことと理解の変化も削除しますか？")
-    ) {
+  useEffect(() => {
+    if (confirmationAction === null) return;
+
+    confirmationButtonRef.current?.focus();
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !isSaving) {
+        setConfirmationAction(null);
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [confirmationAction, isSaving]);
+
+  const input: ReflectionInput = {
+    worked_on: workedOn.trim(),
+    learned: learned.trim(),
+    next_action: nextAction.trim(),
+  };
+  const hasInput = Object.values(input).some(Boolean);
+  const hasChanges =
+    workedOn !== (initialReflection?.worked_on ?? "") ||
+    learned !== (initialReflection?.learned ?? "") ||
+    nextAction !== (initialReflection?.next_action ?? "");
+
+  const handleSkip = () => {
+    if (hasChanges) {
+      setConfirmationAction("discard");
       return;
     }
-    setDifficulty("");
-    setAttempted("");
-    setUnderstandingChange("");
+    onSkip();
   };
 
-  const clearAttempted = () => {
-    if (
-      understandingChange &&
-      !window.confirm("理解の変化も削除しますか？")
-    ) {
+  const deleteReflection = async () => {
+    if (onDelete === undefined || onDeleted === undefined) {
+      setFormError("振り返りを削除できませんでした。もう一度お試しください。");
+      setConfirmationAction(null);
       return;
     }
-    setAttempted("");
-    setUnderstandingChange("");
+
+    setIsSaving(true);
+    setFieldErrors({});
+    setFormError("");
+    try {
+      await onDelete();
+      onDeleted();
+    } catch (error) {
+      if (error instanceof ApiError) {
+        if (error.isOutcomeUncertain) setIsOutcomeUncertain(true);
+        setFormError(error.message);
+      } else {
+        setFormError("振り返りを削除できませんでした。もう一度お試しください。");
+      }
+    } finally {
+      setIsSaving(false);
+      setConfirmationAction(null);
+    }
   };
 
-  const clearNextAction = () => {
-    if (
-      deepDives.some((content) => content.trim()) &&
-      !window.confirm("追加した深掘りも削除しますか？")
-    ) {
+  const confirmAction = () => {
+    if (confirmationAction === "discard") {
+      setConfirmationAction(null);
+      onSkip();
       return;
     }
-    setNextAction("");
-    setDeepDives([]);
-  };
-
-  const changeAiCommunication = (selection: AiCommunicationSelection) => {
-    setAiCommunication(selection);
-    if (selection === "unused") setAiThinking("");
-  };
-
-  const updateDeepDive = (index: number, content: string) => {
-    setDeepDives((currentDeepDives) =>
-      currentDeepDives.map((currentContent, currentIndex) =>
-        currentIndex === index ? content : currentContent,
-      ),
-    );
-  };
-
-  const removeDeepDive = (index: number) => {
-    setDeepDives((currentDeepDives) =>
-      currentDeepDives.filter((_, currentIndex) => currentIndex !== index),
-    );
+    if (confirmationAction === "delete") void deleteReflection();
   };
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    if (!hasInput) {
+      if (initialReflection === undefined) {
+        onSkip();
+        return;
+      }
+      setConfirmationAction("delete");
+      return;
+    }
+
     setIsSaving(true);
     setFieldErrors({});
     setFormError("");
 
-    const aiCommunicationScore =
-      aiCommunication === "" || aiCommunication === "unused"
-        ? null
-        : toScore(aiCommunication);
-    const aiThinkingScore = toScore(aiThinking);
-    const aiUsageState: AiUsageState =
-      aiCommunication === "unused"
-        ? "unused"
-        : aiCommunicationScore !== null || aiThinkingScore !== null
-          ? "used"
-          : "unanswered";
-
     try {
-      const reflection = await onSubmit({
-        worked_on: workedOn,
-        difficulty,
-        attempted,
-        understanding_change: understandingChange,
-        next_action: nextAction,
-        ai_usage_state: aiUsageState,
-        ai_communication_score: aiCommunicationScore,
-        ai_thinking_score: aiThinkingScore,
-        outcome_score: toScore(outcomeScore),
-        outcome_evidence: outcomeEvidence,
-        deep_dives: deepDives
-          .map((content) => content.trim())
-          .filter(Boolean)
-          .map((content) => ({ content })),
-      });
+      const reflection = await onSubmit(input);
       onSaved(reflection);
     } catch (error) {
       if (error instanceof ApiError) {
@@ -203,7 +167,6 @@ export const ReflectionForm = ({
 
   return (
     <section className="reflection-card" aria-labelledby="reflection-title">
-      <p className="eyebrow">学習の振り返り</p>
       <h1 id="reflection-title">
         {initialReflection ? "振り返りを編集" : "振り返り"}
       </h1>
@@ -212,181 +175,49 @@ export const ReflectionForm = ({
         <span>学習時間 {formatStudyTime(studyRecord.study_seconds)}</span>
       </p>
 
+      {studyRecord.goal && (
+        <section
+          className="reflection-goal"
+          aria-labelledby="reflection-goal-title"
+        >
+          <h2 id="reflection-goal-title">今回の目標</h2>
+          <p>{studyRecord.goal}</p>
+        </section>
+      )}
+
       <form onSubmit={handleSubmit}>
         <fieldset
           className="reflection-input-fields"
-          disabled={isSaving || isOutcomeUncertain}
+          disabled={
+            isSaving || isOutcomeUncertain || confirmationAction !== null
+          }
         >
-        <label htmlFor="reflection-worked-on">今回取り組んだこと</label>
-        <textarea
-          id="reflection-worked-on"
-          rows={4}
-          value={workedOn}
-          onChange={(event) => setWorkedOn(event.target.value)}
-        />
-        {fieldError("worked_on")}
-
-        <label htmlFor="reflection-difficulty">引っかかったこと</label>
-        <textarea
-          id="reflection-difficulty"
-          rows={4}
-          value={difficulty}
-          onChange={(event) => {
-            if (event.target.value === "") clearDifficulty();
-            else setDifficulty(event.target.value);
-          }}
-        />
-        {fieldError("difficulty")}
-
-        <label htmlFor="reflection-attempted">
-          引っかかったことに対して試したこと
-        </label>
-        <textarea
-          id="reflection-attempted"
-          rows={4}
-          value={attempted}
-          disabled={!difficulty.trim()}
-          onChange={(event) => {
-            if (event.target.value === "") clearAttempted();
-            else setAttempted(event.target.value);
-          }}
-        />
-        {fieldError("attempted")}
-
-        <label htmlFor="reflection-understanding-change">
-          試した結果、理解はどう変わったか
-        </label>
-        <textarea
-          id="reflection-understanding-change"
-          rows={4}
-          placeholder="理解が深まった点、まだ分からない点、理解が変わらなかった点など"
-          value={understandingChange}
-          disabled={!attempted.trim()}
-          onChange={(event) => setUnderstandingChange(event.target.value)}
-        />
-        {fieldError("understanding_change")}
-
-        <label htmlFor="reflection-next-action">次に行う具体的な行動</label>
-        <textarea
-          id="reflection-next-action"
-          rows={4}
-          value={nextAction}
-          onChange={(event) => {
-            if (event.target.value === "") clearNextAction();
-            else setNextAction(event.target.value);
-          }}
-        />
-        {fieldError("next_action")}
-
-        <div className="deep-dive-list">
-          {deepDives.map((content, index) => (
-            <div className="deep-dive-field" key={index}>
-              <label htmlFor={`reflection-deep-dive-${index}`}>
-                行動の深掘り {index + 1}
-              </label>
-              <textarea
-                id={`reflection-deep-dive-${index}`}
-                rows={3}
-                value={content}
-                disabled={!nextAction.trim()}
-                onChange={(event) => updateDeepDive(index, event.target.value)}
-              />
-              <button
-                className="text-button"
-                type="button"
-                onClick={() => removeDeepDive(index)}
-              >
-                この深掘りを削除
-              </button>
-            </div>
-          ))}
-        </div>
-        {fieldError("deep_dives")}
-        <button
-          className="secondary-button add-deep-dive-button"
-          type="button"
-          disabled={!nextAction.trim()}
-          onClick={() => setDeepDives((current) => [...current, ""])}
-        >
-          さらに深掘り
-        </button>
-
-        <fieldset className="reflection-score-section">
-          <legend>AIとの向き合い方と成果</legend>
-
-          <label htmlFor="reflection-ai-communication">
-            AIへの質問に、自分の考え・仮説・理由・試したことをどのくらい伝えたか
-          </label>
-          <select
-            id="reflection-ai-communication"
-            value={aiCommunication}
-            onChange={(event) =>
-              changeAiCommunication(
-                event.target.value as AiCommunicationSelection,
-              )
-            }
-          >
-            <option value="">選択してください（任意）</option>
-            {SCORE_OPTIONS.map((score) => (
-              <option value={score} key={score}>
-                {score} / 100
-              </option>
-            ))}
-            <option value="unused">今回はAIを使用していない</option>
-          </select>
-          {fieldError("ai_communication_score")}
-
-          <label htmlFor="reflection-ai-thinking">
-            AIを使った今回の学習や業務で、比較・検討・判断を自分で行った実感はどのくらいあるか
-          </label>
-          <select
-            id="reflection-ai-thinking"
-            value={aiThinking}
-            disabled={aiCommunication === "unused"}
-            onChange={(event) =>
-              setAiThinking(event.target.value as ScoreSelection)
-            }
-          >
-            <option value="">選択してください（任意）</option>
-            {SCORE_OPTIONS.map((score) => (
-              <option value={score} key={score}>
-                {score} / 100
-              </option>
-            ))}
-          </select>
-          {fieldError("ai_thinking_score")}
-
-          <label htmlFor="reflection-outcome-score">
-            現在取り組んでいる学習や業務は、成果や良い影響にどの程度つながっていると感じるか
-          </label>
-          <select
-            id="reflection-outcome-score"
-            value={outcomeScore}
-            onChange={(event) =>
-              setOutcomeScore(event.target.value as ScoreSelection)
-            }
-          >
-            <option value="">選択してください（任意）</option>
-            {SCORE_OPTIONS.map((score) => (
-              <option value={score} key={score}>
-                {score} / 100
-              </option>
-            ))}
-          </select>
-          {fieldError("outcome_score")}
-
-          <label htmlFor="reflection-outcome-evidence">
-            成果や良い影響についての具体的な出来事・変化（任意）
-          </label>
+          <label htmlFor="reflection-worked-on">今回取り組んだこと</label>
           <textarea
-            id="reflection-outcome-evidence"
+            id="reflection-worked-on"
             rows={4}
-            placeholder="以前はできなかったが今はできるようになってきていること、実際に出た成果、周囲からの反応など"
-            value={outcomeEvidence}
-            onChange={(event) => setOutcomeEvidence(event.target.value)}
+            value={workedOn}
+            onChange={(event) => setWorkedOn(event.target.value)}
           />
-          {fieldError("outcome_evidence")}
-        </fieldset>
+          {fieldError("worked_on")}
+
+          <label htmlFor="reflection-learned">分かったこと</label>
+          <textarea
+            id="reflection-learned"
+            rows={4}
+            value={learned}
+            onChange={(event) => setLearned(event.target.value)}
+          />
+          {fieldError("learned")}
+
+          <label htmlFor="reflection-next-action">次にやること</label>
+          <textarea
+            id="reflection-next-action"
+            rows={4}
+            value={nextAction}
+            onChange={(event) => setNextAction(event.target.value)}
+          />
+          {fieldError("next_action")}
         </fieldset>
 
         {formError && (
@@ -395,23 +226,79 @@ export const ReflectionForm = ({
           </p>
         )}
         <div className="reflection-actions">
-          <button className="primary-button" type="submit" disabled={isSaving}>
+          <button
+            className="primary-button"
+            type="submit"
+            disabled={isSaving || confirmationAction !== null}
+          >
             {isSaving
               ? "保存しています"
               : isOutcomeUncertain
-                ? "同じ内容で保存結果を確認"
+                ? initialReflection && !hasInput
+                  ? "削除結果を確認"
+                  : "同じ内容で保存結果を確認"
                 : "保存"}
           </button>
           <button
             className="secondary-button"
             type="button"
-            disabled={isSaving || isOutcomeUncertain}
-            onClick={onCancel}
+            disabled={
+              isSaving || isOutcomeUncertain || confirmationAction !== null
+            }
+            onClick={handleSkip}
           >
-            キャンセル
+            {initialReflection ? "編集をキャンセル" : "振り返りを書かず終了"}
           </button>
         </div>
       </form>
+
+      {confirmationAction !== null && (
+        <div className="confirmation-modal-backdrop">
+          <section
+            className="confirmation-modal"
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="reflection-confirmation-title"
+            aria-describedby="reflection-confirmation-description"
+          >
+            <h2 id="reflection-confirmation-title">
+              {confirmationAction === "delete"
+                ? "振り返りなしに戻しますか？"
+                : "変更内容を破棄しますか？"}
+            </h2>
+            <p id="reflection-confirmation-description">
+              {confirmationAction === "delete"
+                ? "入力済みの振り返りは削除され、元に戻せません。学習時間と今回の目標は残ります。"
+                : initialReflection
+                  ? "保存していない変更内容は失われます。"
+                  : "入力中の振り返りは失われます。学習時間はすでに保存されています。"}
+            </p>
+            <div className="confirmation-modal-actions">
+              <button
+                ref={confirmationButtonRef}
+                className="primary-button"
+                type="button"
+                disabled={isSaving}
+                onClick={confirmAction}
+              >
+                {isSaving
+                  ? "処理しています"
+                  : confirmationAction === "delete"
+                    ? "振り返りなしに戻す"
+                    : "破棄する"}
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={isSaving}
+                onClick={() => setConfirmationAction(null)}
+              >
+                やめる
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
     </section>
   );
 };

@@ -10,10 +10,17 @@ import {
 import { ApiError } from "./api/client";
 import {
   createReflection,
+  deleteReflection,
   updateReflection,
   type Reflection,
 } from "./api/reflections";
-import { createStudyRecord, type StudyRecord } from "./api/studyRecords";
+import {
+  createStudyRecord,
+  deleteStudyRecord,
+  getStudyHistory,
+  getTodayStudySeconds,
+  type StudyRecord,
+} from "./api/studyRecords";
 import { AuthForm, type AuthFormMode } from "./components/AuthForm";
 import { ReflectionForm } from "./components/ReflectionForm";
 import { StudyRecordDetail } from "./components/StudyRecordDetail";
@@ -26,6 +33,7 @@ type Screen =
   | "timer"
   | "reflection"
   | "reflection-detail"
+  | "reflection-skipped"
   | AuthFormMode;
 
 const GUEST_CHOICE_KEY = "pomodoro-reflection:guest-choice";
@@ -112,12 +120,12 @@ const App = () => {
     setScreen("timer");
   };
 
-  const cancelReflection = () => {
+  const skipReflection = () => {
     if (savedReflection !== null) {
       setScreen("reflection-detail");
       return;
     }
-    returnToNewTimer();
+    setScreen("reflection-skipped");
   };
 
   const isTimerVisible = screen === "timer";
@@ -249,6 +257,12 @@ const App = () => {
               showStudyTime={user !== null}
               recoveryOwnerKey={user ? `user:${user.email}` : "guest"}
               onCreateStudyRecord={user ? createStudyRecord : undefined}
+              loadTodayStudySeconds={user ? getTodayStudySeconds : undefined}
+              loadStudyHistory={user ? getStudyHistory : undefined}
+              deleteStudyRecord={user ? deleteStudyRecord : undefined}
+              createReflection={user ? createReflection : undefined}
+              updateReflection={user ? updateReflection : undefined}
+              deleteReflection={user ? deleteReflection : undefined}
               onStartReflection={user ? startReflection : undefined}
               onTimerNavigationLockChange={setIsTimerNavigationLocked}
             />
@@ -270,9 +284,32 @@ const App = () => {
                 : updateReflection(reflectionStudyRecord.id, input)
             }
             onSaved={finishReflection}
-            onCancel={cancelReflection}
+            onDelete={() => deleteReflection(reflectionStudyRecord.id)}
+            onDeleted={() => {
+              setSavedReflection(null);
+              setScreen("reflection-skipped");
+            }}
+            onSkip={skipReflection}
           />
         )}
+
+        {screen === "reflection-skipped" &&
+          reflectionStudyRecord !== null && (
+            <section className="welcome-card" aria-labelledby="reflection-skipped-title">
+              <p className="eyebrow">学習終了</p>
+              <h1 id="reflection-skipped-title">学習時間を保存しました</h1>
+              <p>振り返りは保存していません。</p>
+              <div className="welcome-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={returnToNewTimer}
+                >
+                  新しい学習を始める
+                </button>
+              </div>
+            </section>
+          )}
 
         {screen === "reflection-detail" &&
           reflectionStudyRecord !== null &&

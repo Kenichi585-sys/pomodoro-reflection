@@ -1,25 +1,24 @@
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, transaction
-from rest_framework import status
+from django.db.models import Sum
+from django.utils import timezone
+from rest_framework import serializers, status
 from rest_framework.generics import get_object_or_404
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from .models import DEFAULT_STUDY_THEME_NAME, Reflection, StudyRecord, StudyTheme
-from .serializers import ReflectionSerializer, StudyRecordSerializer
+from .serializers import (
+    ReflectionSerializer,
+    StudyRecordHistorySerializer,
+    StudyRecordSerializer,
+)
 
 
 REFLECTION_VALUE_FIELDS = (
     "worked_on",
-    "difficulty",
-    "attempted",
-    "understanding_change",
+    "learned",
     "next_action",
-    "ai_usage_state",
-    "ai_communication_score",
-    "ai_thinking_score",
-    "outcome_score",
-    "outcome_evidence",
 )
 
 
@@ -30,15 +29,7 @@ def reflection_matches_input(reflection, validated_data):
         if getattr(reflection, field_name) != input_value:
             return False
 
-    input_deep_dives = [
-        deep_dive["content"] for deep_dive in validated_data.get("deep_dives", [])
-    ]
-    saved_deep_dives = list(
-        reflection.deep_dives.order_by("display_order").values_list(
-            "content", flat=True
-        )
-    )
-    return input_deep_dives == saved_deep_dives
+    return True
 
 
 def reflection_conflict_response():
@@ -82,6 +73,94 @@ class StudyRecordCreateView(APIView):
         )
 
 
+class TodayStudySummaryView(APIView):
+    def get(self, request):
+        study_seconds = (
+            StudyRecord.objects.filter(
+                user=request.user,
+                study_date=timezone.localdate(),
+            ).aggregate(total=Sum("study_seconds"))["total"]
+            or 0
+        )
+        return Response({"study_seconds": study_seconds})
+
+
+class StudyRecordDeleteView(APIView):
+    def delete(self, request, study_record_id):
+        StudyRecord.objects.filter(
+            id=study_record_id,
+            user=request.user,
+        ).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+class StudyRecordHistoryView(APIView):
+    page_size = 20
+
+    def get(self, request):
+        user_records = StudyRecord.objects.filter(user=request.user)
+        try:
+            offset = int(request.query_params.get("offset", "0"))
+        except ValueError as error:
+            raise serializers.ValidationError(
+                {"offset": "0以上の整数を指定してください。"}
+            ) from error
+        if offset < 0:
+            raise serializers.ValidationError(
+                {"offset": "0以上の整数を指定してください。"}
+            )
+
+        study_dates = list(
+            user_records
+            .order_by("-study_date")
+            .values_list("study_date", flat=True)
+            .distinct()[offset : offset + self.page_size + 1]
+        )
+        has_more = len(study_dates) > self.page_size
+        selected_dates = study_dates[: self.page_size]
+        records = (
+            StudyRecord.objects.filter(
+                user=request.user,
+                study_date__in=selected_dates,
+            )
+            .select_related("reflection")
+            .order_by("-started_at")
+        )
+
+        records_by_date = {study_date: [] for study_date in selected_dates}
+        for record in records:
+            records_by_date[record.study_date].append(record)
+
+        groups = []
+        for study_date in selected_dates:
+            date_records = records_by_date[study_date]
+            groups.append(
+                {
+                    "study_date": study_date.isoformat(),
+                    "study_seconds": sum(
+                        record.study_seconds for record in date_records
+                    ),
+                    "records": StudyRecordHistorySerializer(
+                        date_records,
+                        many=True,
+                    ).data,
+                }
+            )
+
+        return Response(
+            {
+                "total_study_seconds": (
+                    user_records.aggregate(total=Sum("study_seconds"))["total"]
+                    or 0
+                ),
+                "groups": groups,
+                "next_offset": (
+                    offset + self.page_size if has_more else None
+                ),
+            }
+        )
+
+
 class ReflectionView(APIView):
     @staticmethod
     def get_study_record(request, study_record_id):
@@ -94,22 +173,12 @@ class ReflectionView(APIView):
     def post(self, request, study_record_id):
         study_record = self.get_study_record(request, study_record_id)
         serializer = ReflectionSerializer(data=request.data)
-        if not serializer.is_valid():
-            return Response(
-                {"errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        serializer.is_valid(raise_exception=True)
         validated_data = dict(serializer.validated_data)
-        validated_data["deep_dives"] = [
-            dict(deep_dive)
-            for deep_dive in serializer.validated_data.get("deep_dives", [])
-        ]
 
-        existing_reflection = (
-            Reflection.objects.prefetch_related("deep_dives")
-            .filter(study_record=study_record)
-            .first()
-        )
+        existing_reflection = Reflection.objects.filter(
+            study_record=study_record
+        ).first()
         if existing_reflection is not None:
             if reflection_matches_input(existing_reflection, validated_data):
                 return Response(ReflectionSerializer(existing_reflection).data)
@@ -119,11 +188,9 @@ class ReflectionView(APIView):
             with transaction.atomic():
                 reflection = serializer.save(study_record=study_record)
         except IntegrityError:
-            existing_reflection = (
-                Reflection.objects.prefetch_related("deep_dives")
-                .filter(study_record=study_record)
-                .first()
-            )
+            existing_reflection = Reflection.objects.filter(
+                study_record=study_record
+            ).first()
             if existing_reflection is None:
                 raise
             if reflection_matches_input(existing_reflection, validated_data):
@@ -137,7 +204,7 @@ class ReflectionView(APIView):
     def patch(self, request, study_record_id):
         study_record = self.get_study_record(request, study_record_id)
         reflection = get_object_or_404(
-            Reflection.objects.prefetch_related("deep_dives"),
+            Reflection,
             study_record=study_record,
         )
         serializer = ReflectionSerializer(
@@ -145,11 +212,12 @@ class ReflectionView(APIView):
             data=request.data,
             partial=True,
         )
-        if not serializer.is_valid():
-            return Response(
-                {"errors": serializer.errors},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        serializer.is_valid(raise_exception=True)
         with transaction.atomic():
             reflection = serializer.save()
         return Response(ReflectionSerializer(reflection).data)
+
+    def delete(self, request, study_record_id):
+        study_record = self.get_study_record(request, study_record_id)
+        Reflection.objects.filter(study_record=study_record).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

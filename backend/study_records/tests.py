@@ -10,7 +10,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APIClient
 
-from .models import StudyRecord, StudyTheme
+from .models import Reflection, StudyRecord, StudyTheme
 
 
 class StudyRecordModelTests(TestCase):
@@ -124,6 +124,7 @@ class StudyRecordCreateApiTests(TestCase):
             "started_at": self.started_at.isoformat(),
             "ended_at": (self.started_at + timedelta(minutes=25)).isoformat(),
             "study_seconds": 25 * 60,
+            "goal": "APIの保存経路を理解する",
         }
 
     def test_authenticated_user_can_create_record_without_duplication(self):
@@ -162,6 +163,30 @@ class StudyRecordCreateApiTests(TestCase):
         self.assertEqual(record.user, self.user)
         self.assertEqual(record.theme, self.theme)
         self.assertEqual(record.study_date, timezone.localdate(self.started_at))
+        self.assertEqual(record.goal, "APIの保存経路を理解する")
+
+        summary_response = self.client.get("/api/study-records/today-summary/")
+        self.assertEqual(summary_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(summary_response.json()["study_seconds"], 25 * 60)
+
+        Reflection.objects.create(
+            study_record=record,
+            worked_on="APIを確認した",
+            learned="日付単位で取得できる",
+        )
+        history_response = self.client.get("/api/study-records/history/")
+        self.assertEqual(history_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            history_response.json()["total_study_seconds"],
+            25 * 60,
+        )
+        self.assertEqual(len(history_response.json()["groups"]), 1)
+        self.assertEqual(
+            history_response.json()["groups"][0]["records"][0]["reflection"][
+                "learned"
+            ],
+            "日付単位で取得できる",
+        )
 
         inconsistent_response = self.client.post(
             "/api/study-records/",
@@ -188,3 +213,38 @@ class StudyRecordCreateApiTests(TestCase):
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertFalse(StudyRecord.objects.exists())
+
+    def test_authenticated_user_can_delete_own_record_with_csrf(self):
+        record = StudyRecord.objects.create(
+            user=self.user,
+            theme=self.theme,
+            client_uuid=uuid.uuid4(),
+            study_date=timezone.localdate(self.started_at),
+            started_at=self.started_at,
+            ended_at=self.started_at + timedelta(minutes=25),
+            study_seconds=25 * 60,
+            goal="削除を確認する",
+        )
+        Reflection.objects.create(
+            study_record=record,
+            worked_on="削除経路を確認した",
+        )
+        self.client.force_login(self.user)
+        csrf_response = self.client.get("/api/auth/csrf/")
+        csrf_token = csrf_response.json()["csrf_token"]
+
+        missing_csrf_response = self.client.delete(
+            f"/api/study-records/{record.id}/",
+        )
+        delete_response = self.client.delete(
+            f"/api/study-records/{record.id}/",
+            HTTP_X_CSRFTOKEN=csrf_token,
+        )
+
+        self.assertEqual(
+            missing_csrf_response.status_code,
+            status.HTTP_403_FORBIDDEN,
+        )
+        self.assertEqual(delete_response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertFalse(StudyRecord.objects.filter(id=record.id).exists())
+        self.assertFalse(Reflection.objects.filter(study_record_id=record.id).exists())

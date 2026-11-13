@@ -502,6 +502,241 @@
   line-height: 1.5;
 }
 
+.goal-setup-field {
+  display: grid;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.goal-setup-field label {
+  font-weight: 700;
+}
+
+.goal-setup-field textarea {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid #505050;
+  border-radius: 10px;
+  outline: none;
+  background: #171717;
+  color: #fff;
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.goal-setup-field textarea:focus {
+  border-color: #a8dfee;
+  box-shadow: 0 0 0 3px rgb(168 223 238 / 18%);
+}
+
+.timer-goal-summary {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px 18px;
+  width: min(720px, 100%);
+  margin: 0 auto 18px;
+  padding: 14px 18px;
+  border: 1px solid #343434;
+  border-radius: 14px;
+  background: #111;
+}
+
+.timer-goal-summary h2 {
+  margin: 0;
+  color: #a8dfee;
+  font-size: 0.85rem;
+}
+
+.timer-goal-summary p {
+  grid-column: 1 / -1;
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.timer-goal-summary .text-button {
+  min-height: auto;
+  padding: 0;
+}
+
+.timer-goal-edit {
+  display: block;
+  margin: 0 auto 12px;
+}
+
+.main-content:has(.study-history) {
+  place-items: start center;
+}
+
+.study-history {
+  width: min(900px, 100%);
+  padding: clamp(24px, 4vw, 44px);
+  border: 1px solid #363636;
+  border-radius: 24px;
+  background: #0c0c0c;
+  box-shadow: 0 24px 70px rgb(0 0 0 / 35%);
+}
+
+.study-history-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.study-history-heading h1 {
+  margin: 0;
+  color: #a8dfee;
+  font-size: clamp(1.7rem, 4vw, 2.5rem);
+}
+
+.study-history-heading p {
+  display: grid;
+  justify-items: end;
+  gap: 2px;
+  margin: 0;
+}
+
+.study-history-heading span {
+  color: #bdbdbd;
+  font-size: 0.82rem;
+}
+
+.study-history-heading strong {
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.study-history-groups,
+.study-history-records {
+  display: grid;
+  gap: 18px;
+}
+
+.study-history-groups {
+  margin-top: 30px;
+}
+
+.study-history-group {
+  display: grid;
+  gap: 14px;
+}
+
+.study-history-date-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #343434;
+}
+
+.study-history-date-header h2,
+.study-history-date-header p {
+  margin: 0;
+}
+
+.study-history-date-header h2 {
+  font-size: 1.12rem;
+}
+
+.study-history-date-header p {
+  color: #bdbdbd;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.study-history-record {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border: 1px solid #343434;
+  border-radius: 16px;
+  background: #171717;
+}
+
+.study-history-period {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 0;
+  color: #bdbdbd;
+  font-variant-numeric: tabular-nums;
+}
+
+.study-history-period span {
+  color: #fff;
+  font-weight: 700;
+}
+
+.study-history-record h3 {
+  margin: 0 0 6px;
+  color: #a8dfee;
+  font-size: 0.86rem;
+}
+
+.study-history-record div p,
+.study-history-empty {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.65;
+}
+
+.study-history-empty {
+  color: #999;
+}
+
+.study-history-delete-button {
+  min-height: auto;
+  padding: 4px 0;
+  color: #ffb2b2;
+  font-size: 0.86rem;
+}
+
+.study-history-record-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.study-history-record-actions .secondary-button {
+  min-height: 40px;
+  padding: 8px 14px;
+}
+
+.study-history-delete-confirmation {
+  display: grid;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #854747;
+  border-radius: 12px;
+  background: #241414;
+}
+
+.study-history-delete-confirmation h3,
+.study-history-delete-confirmation p {
+  margin: 0;
+}
+
+.study-history-delete-confirmation > div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.study-history-delete-confirmation .secondary-button {
+  border-color: #c97777;
+}
+
+.study-history-actions {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin-top: 28px;
+}
+
 .main-content:has(.reflection-card) {
   place-items: start center;
 }
@@ -517,6 +752,7 @@
 
 .reflection-card h1 {
   margin: 0;
+  color: #a8dfee;
 }
 
 .reflection-study-summary {
@@ -530,6 +766,26 @@
 .reflection-card form {
   display: grid;
   gap: 10px;
+}
+
+.reflection-goal {
+  margin-bottom: 12px;
+  padding: 18px;
+  border: 1px solid #363636;
+  border-radius: 14px;
+  background: #151515;
+}
+
+.reflection-goal h2 {
+  margin: 0 0 8px;
+  color: #bdbdbd;
+  font-size: 0.9rem;
+}
+
+.reflection-goal p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.7;
 }
 
 .reflection-input-fields {
@@ -624,6 +880,47 @@
   justify-content: flex-end;
   gap: 12px;
   margin-top: 28px;
+}
+
+.confirmation-modal-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgb(0 0 0 / 72%);
+}
+
+.confirmation-modal {
+  width: min(460px, 100%);
+  padding: clamp(24px, 5vw, 36px);
+  border: 1px solid #555;
+  border-radius: 20px;
+  background: #151515;
+  box-shadow: 0 24px 80px rgb(0 0 0 / 55%);
+}
+
+.confirmation-modal h2,
+.confirmation-modal p {
+  margin: 0;
+}
+
+.confirmation-modal h2 {
+  font-size: 1.35rem;
+}
+
+.confirmation-modal p {
+  margin-top: 14px;
+  color: #c8c8c8;
+  line-height: 1.7;
+}
+
+.confirmation-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 26px;
 }
 
 .study-record-detail {
@@ -721,8 +1018,38 @@
     display: grid;
   }
 
+  .confirmation-modal-actions {
+    display: grid;
+  }
+
   .study-record-detail {
     padding: 26px 20px;
+  }
+
+  .study-history {
+    padding: 26px 20px;
+  }
+
+  .study-history-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .study-history-heading p {
+    justify-items: start;
+  }
+
+  .study-history-record-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .study-history-date-header,
+  .study-history-period {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
   }
 
   .reflection-score-list div {

@@ -5,6 +5,7 @@ import { ApiError } from '../api/client'
 import type {
   CreateStudyRecordInput,
   CreateStudyRecordOptions,
+  StudyHistoryResponse,
   StudyRecord,
 } from '../api/studyRecords'
 import { TIMER_TEST_PRESETS } from '../timer/timerConfig'
@@ -44,8 +45,8 @@ const renderTimerPanel = (
     input: CreateStudyRecordInput,
     options?: CreateStudyRecordOptions,
   ) => Promise<StudyRecord>,
-) =>
-  render(
+) => {
+  const rendered = render(
     <TimerPanel
       showStudyTime
       recoveryOwnerKey={recoveryOwnerKey}
@@ -53,6 +54,10 @@ const renderTimerPanel = (
       onTimerNavigationLockChange={timerLockMock}
     />,
   )
+  const continueButton = screen.queryByRole('button', { name: 'タイマーへ進む' })
+  if (continueButton !== null) fireEvent.click(continueButton)
+  return rendered
+}
 
 vi.mock('../audio/useBrownNoise', () => ({
   useBrownNoise: () => audioMocks,
@@ -81,6 +86,159 @@ describe('TimerPanel', () => {
   afterEach(() => {
     cleanup()
     vi.useRealTimers()
+  })
+
+  it('ログイン中は目標を入力してからタイマーへ進み、開始後も表示する', async () => {
+    render(
+      <TimerPanel
+        showStudyTime
+        recoveryOwnerKey="user:test@example.com"
+        onCreateStudyRecord={vi.fn()}
+        loadTodayStudySeconds={async () => 60 * 60}
+        onTimerNavigationLockChange={timerLockMock}
+      />,
+    )
+
+    await act(async () => undefined)
+
+    fireEvent.change(screen.getByLabelText('今回の目標（任意）'), {
+      target: { value: 'Serializerを説明できるようにする' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'タイマーへ進む' }))
+
+    expect(screen.getByText('Serializerを説明できるようにする')).toBeInTheDocument()
+    expect(screen.getByText('1時間')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+    expect(screen.getByText('Serializerを説明できるようにする')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '目標を変更' })).not.toBeInTheDocument()
+  })
+
+  it('目標入力画面から過去の振り返りを開いて戻る', async () => {
+    const loadStudyHistory = vi.fn<
+      (offset?: number) => Promise<StudyHistoryResponse>
+    >().mockResolvedValue({
+      total_study_seconds: 0,
+      groups: [],
+      next_offset: null,
+    })
+
+    render(
+      <TimerPanel
+        showStudyTime
+        recoveryOwnerKey="user:test@example.com"
+        onCreateStudyRecord={vi.fn()}
+        loadStudyHistory={loadStudyHistory}
+        deleteStudyRecord={vi.fn()}
+        createReflection={vi.fn()}
+        updateReflection={vi.fn()}
+        deleteReflection={vi.fn()}
+        onTimerNavigationLockChange={timerLockMock}
+      />,
+    )
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: '過去の振り返りを見る' }),
+      )
+    })
+    expect(
+      screen.getByRole('heading', { name: '過去の振り返り' }),
+    ).toBeInTheDocument()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: '今回の目標へ戻る' }),
+    )
+    expect(
+      screen.getByRole('heading', { name: '今回の目標を決める' }),
+    ).toBeInTheDocument()
+  })
+
+  it('今日の履歴を削除するとタイマー画面の今日の学習時間も減る', async () => {
+    const now = new Date()
+    const studyDate = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-')
+    const historyRecord = {
+      id: 12,
+      study_date: studyDate,
+      started_at: now.toISOString(),
+      ended_at: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
+      study_seconds: 10 * 60,
+      goal: '',
+      reflection: null,
+    }
+
+    render(
+      <TimerPanel
+        showStudyTime
+        recoveryOwnerKey="user:test@example.com"
+        onCreateStudyRecord={vi.fn()}
+        loadTodayStudySeconds={async () => 10 * 60}
+        loadStudyHistory={async () => ({
+          total_study_seconds: 10 * 60,
+          groups: [
+            {
+              study_date: studyDate,
+              study_seconds: 10 * 60,
+              records: [historyRecord],
+            },
+          ],
+          next_offset: null,
+        })}
+        deleteStudyRecord={vi.fn().mockResolvedValue(undefined)}
+        createReflection={vi.fn()}
+        updateReflection={vi.fn()}
+        deleteReflection={vi.fn()}
+        onTimerNavigationLockChange={timerLockMock}
+      />,
+    )
+
+    await act(async () => undefined)
+    fireEvent.click(
+      screen.getByRole('button', { name: '過去の振り返りを見る' }),
+    )
+    await act(async () => undefined)
+    fireEvent.click(
+      screen.getByRole('button', { name: 'この学習記録を削除' }),
+    )
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: '削除する' }))
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: '今回の目標へ戻る' }),
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'タイマーへ進む' }))
+
+    expect(screen.getByText('0分')).toBeInTheDocument()
+  })
+
+  it('日付が変わると今日の学習時間を新しい日付で取得し直す', async () => {
+    vi.setSystemTime(new Date(2026, 9, 27, 23, 59, 59))
+    const loadTodayStudySeconds = vi
+      .fn<() => Promise<number>>()
+      .mockResolvedValueOnce(60 * 60)
+      .mockResolvedValueOnce(0)
+
+    render(
+      <TimerPanel
+        showStudyTime
+        recoveryOwnerKey="user:test@example.com"
+        onCreateStudyRecord={vi.fn()}
+        loadTodayStudySeconds={loadTodayStudySeconds}
+        onTimerNavigationLockChange={timerLockMock}
+      />,
+    )
+
+    await act(async () => undefined)
+    fireEvent.click(screen.getByRole('button', { name: 'タイマーへ進む' }))
+    expect(screen.getByText('1時間')).toBeInTheDocument()
+
+    await act(async () => vi.advanceTimersByTime(1_100))
+
+    expect(loadTodayStudySeconds).toHaveBeenCalledTimes(2)
+    expect(screen.getByText('0分')).toBeInTheDocument()
   })
 
   it('開始後は実時刻との差から残り時間を更新する', () => {
@@ -120,6 +278,7 @@ describe('TimerPanel', () => {
       started_at: '2026-10-27T00:00:00.000Z',
       ended_at: '2026-10-27T00:00:02.000Z',
       study_seconds: 2,
+      goal: '',
     })
     expect(
       screen.getByRole('heading', { name: '学習時間を保存しました' }),
@@ -283,6 +442,7 @@ describe('TimerPanel', () => {
       savedAtMs: Date.now(),
       sessionStartedAtMs: Date.now() - 2_000,
       clientUuid: '00000000-0000-4000-8000-000000000001',
+      goal: '復旧処理を確認する',
       presetId: '25-5',
       phase: 'focus',
       breakKind: null,

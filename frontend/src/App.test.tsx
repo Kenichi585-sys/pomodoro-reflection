@@ -101,7 +101,7 @@ describe('App', () => {
     fireEvent.click(screen.getByRole('button', { name: 'ログイン' }))
 
     const accountButton = await screen.findByRole('button', { name: 'アカウント' })
-    expect(screen.getByText('今回の学習時間')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: '今回の目標を決める' })).toBeInTheDocument()
     expect(screen.queryByText('User@example.com')).not.toBeInTheDocument()
     fireEvent.click(accountButton)
     expect(screen.getByText('User@example.com')).toBeInTheDocument()
@@ -130,6 +130,7 @@ describe('App', () => {
     const accountButton = await screen.findByRole('button', { name: 'アカウント' })
     fireEvent.click(accountButton)
     const logoutButton = screen.getByRole('button', { name: 'ログアウト' })
+    fireEvent.click(screen.getByRole('button', { name: 'タイマーへ進む' }))
     fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
 
     expect(accountButton).toBeDisabled()
@@ -247,6 +248,7 @@ describe('App', () => {
           user: { email: 'User@example.com' },
         }),
       )
+      .mockResolvedValueOnce(jsonResponse({ study_seconds: 0 }))
       .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }))
       .mockResolvedValueOnce(
         jsonResponse({ detail: 'ログアウト処理に失敗しました。' }, 500),
@@ -271,22 +273,15 @@ describe('App', () => {
       started_at: '2026-11-11T09:00:00+09:00',
       ended_at: '2026-11-11T09:25:00+09:00',
       study_seconds: 25 * 60,
+      goal: '',
       created_at: '2026-11-11T09:25:00+09:00',
       updated_at: '2026-11-11T09:25:00+09:00',
     }
     const reflection = {
       id: 3,
       worked_on: 'Serializerを読んだ',
-      difficulty: '',
-      attempted: '',
-      understanding_change: '',
+      learned: '',
       next_action: '',
-      ai_usage_state: 'unanswered',
-      ai_communication_score: null,
-      ai_thinking_score: null,
-      outcome_score: null,
-      outcome_evidence: '',
-      deep_dives: [],
       created_at: '2026-11-11T09:26:00+09:00',
       updated_at: '2026-11-11T09:26:00+09:00',
     }
@@ -303,6 +298,7 @@ describe('App', () => {
           user: { email: 'User@example.com' },
         }),
       )
+      .mockResolvedValueOnce(jsonResponse({ study_seconds: 0 }))
       .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }))
       .mockResolvedValueOnce(jsonResponse(studyRecord, 201))
       .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }))
@@ -312,6 +308,9 @@ describe('App', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(<App />)
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'タイマーへ進む' }),
+    )
     fireEvent.click(await screen.findByRole('button', { name: '学習を開始' }))
     fireEvent.click(screen.getByRole('button', { name: '学習を終了' }))
     fireEvent.click(
@@ -331,7 +330,7 @@ describe('App', () => {
     ).toBeInTheDocument()
     expect(screen.getByText('Serializerを読んだ')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+      6,
       '/api/study-records/12/reflection/',
       expect.objectContaining({ method: 'POST' }),
     )
@@ -345,10 +344,10 @@ describe('App', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(7))
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(8))
     expect(await screen.findByText('Serializerを読み直した')).toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
-      7,
+      8,
       '/api/study-records/12/reflection/',
       expect.objectContaining({ method: 'PATCH' }),
     )

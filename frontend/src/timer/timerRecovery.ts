@@ -4,7 +4,7 @@ import {
   type TimerPresetId,
 } from './timerConfig'
 
-export const TIMER_RECOVERY_VERSION = 3
+export const TIMER_RECOVERY_VERSION = 4
 const TIMER_RECOVERY_STORAGE_KEY_PREFIX = 'pomodoro-reflection:timer-recovery'
 
 export type TimerRecoveryPhase = 'focus' | 'break' | 'waiting'
@@ -21,6 +21,7 @@ export type TimerRecoverySnapshot = {
   savedAtMs: number
   sessionStartedAtMs: number
   clientUuid: string
+  goal: string
   presetId: TimerPresetId
   phase: TimerRecoveryPhase
   breakKind: TimerRecoveryBreakKind
@@ -208,6 +209,7 @@ const isTimerRecoverySnapshot = (
     savedAtMs,
     sessionStartedAtMs,
     clientUuid,
+    goal,
     presetId,
     phase,
     breakKind,
@@ -224,6 +226,7 @@ const isTimerRecoverySnapshot = (
     isNonNegativeSafeNumber(sessionStartedAtMs) &&
     sessionStartedAtMs <= savedAtMs &&
     isUuid(clientUuid) &&
+    typeof goal === 'string' &&
     isTimerPresetId(presetId) &&
     isTimerRecoveryPhase(phase) &&
     isTimerRecoveryBreakKind(breakKind) &&

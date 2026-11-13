@@ -13,6 +13,7 @@ const studyRecord: StudyRecord = {
   started_at: "2026-11-11T09:00:00+09:00",
   ended_at: "2026-11-11T09:25:00+09:00",
   study_seconds: 25 * 60,
+  goal: "Serializerの流れを説明できるようにする",
   created_at: "2026-11-11T09:25:00+09:00",
   updated_at: "2026-11-11T09:25:00+09:00",
 };
@@ -20,40 +21,11 @@ const studyRecord: StudyRecord = {
 const reflectionResponse = (input: ReflectionInput): Reflection => ({
   id: 1,
   worked_on: input.worked_on ?? "",
-  difficulty: input.difficulty ?? "",
-  attempted: input.attempted ?? "",
-  understanding_change: input.understanding_change ?? "",
+  learned: input.learned ?? "",
   next_action: input.next_action ?? "",
-  ai_usage_state: input.ai_usage_state ?? "unanswered",
-  ai_communication_score: input.ai_communication_score ?? null,
-  ai_thinking_score: input.ai_thinking_score ?? null,
-  outcome_score: input.outcome_score ?? null,
-  outcome_evidence: input.outcome_evidence ?? "",
-  deep_dives: (input.deep_dives ?? []).map((deepDive, index) => ({
-    id: index + 1,
-    content: deepDive.content,
-    display_order: index,
-  })),
   created_at: "2026-11-11T09:26:00+09:00",
   updated_at: "2026-11-11T09:26:00+09:00",
 });
-
-const renderForm = () => {
-  const onSubmit = vi.fn(async (input: ReflectionInput) =>
-    reflectionResponse(input),
-  );
-  const onSaved = vi.fn();
-  const onCancel = vi.fn();
-  render(
-    <ReflectionForm
-      studyRecord={studyRecord}
-      onSubmit={onSubmit}
-      onSaved={onSaved}
-      onCancel={onCancel}
-    />,
-  );
-  return { onSubmit, onSaved, onCancel };
-};
 
 describe("ReflectionForm", () => {
   afterEach(() => {
@@ -61,85 +33,91 @@ describe("ReflectionForm", () => {
     vi.restoreAllMocks();
   });
 
-  it("前提となる回答に合わせて後続欄を操作可能にする", () => {
-    renderForm();
-
-    const attempted = screen.getByLabelText(
-      "引っかかったことに対して試したこと",
+  it("今回の目標を確認し、3項目を保存する", async () => {
+    const onSubmit = vi.fn(async (input: ReflectionInput) =>
+      reflectionResponse(input),
     );
-    const understanding = screen.getByLabelText(
-      "試した結果、理解はどう変わったか",
-    );
-    expect(attempted).toBeDisabled();
-    expect(understanding).toBeDisabled();
-
-    fireEvent.change(screen.getByLabelText("引っかかったこと"), {
-      target: { value: "型の流れが分からなかった" },
-    });
-    expect(attempted).toBeEnabled();
-    fireEvent.change(attempted, {
-      target: { value: "値の受け渡しを図にした" },
-    });
-    expect(understanding).toBeEnabled();
-  });
-
-  it("AI未使用を選ぶと自分で考えた実感を未選択へ戻して無効化する", () => {
-    renderForm();
-
-    const thinking = screen.getByLabelText(
-      "AIを使った今回の学習や業務で、比較・検討・判断を自分で行った実感はどのくらいあるか",
-    );
-    fireEvent.change(thinking, { target: { value: "70" } });
-    fireEvent.change(
-      screen.getByLabelText(
-        "AIへの質問に、自分の考え・仮説・理由・試したことをどのくらい伝えたか",
-      ),
-      { target: { value: "unused" } },
+    const onSaved = vi.fn();
+    render(
+      <ReflectionForm
+        studyRecord={studyRecord}
+        onSubmit={onSubmit}
+        onSaved={onSaved}
+        onSkip={vi.fn()}
+      />,
     );
 
-    expect(thinking).toBeDisabled();
-    expect(thinking).toHaveValue("");
-  });
-
-  it("入力内容と深掘りをAPI用の値へ変換して保存する", async () => {
-    const { onSubmit, onSaved } = renderForm();
-
+    expect(
+      screen.getByText("Serializerの流れを説明できるようにする"),
+    ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("今回取り組んだこと"), {
-      target: { value: "Serializerを読んだ" },
+      target: { value: " Serializerを読んだ " },
     });
-    fireEvent.change(screen.getByLabelText("次に行う具体的な行動"), {
+    fireEvent.change(screen.getByLabelText("分かったこと"), {
+      target: { value: "検証後のデータを使う" },
+    });
+    fireEvent.change(screen.getByLabelText("次にやること"), {
       target: { value: "短い記事を書く" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "さらに深掘り" }));
-    fireEvent.change(screen.getByLabelText("行動の深掘り 1"), {
-      target: { value: "コード例を一つ選ぶ" },
-    });
-    fireEvent.change(
-      screen.getByLabelText(
-        "AIへの質問に、自分の考え・仮説・理由・試したことをどのくらい伝えたか",
-      ),
-      { target: { value: "70" } },
-    );
-    fireEvent.change(
-      screen.getByLabelText(
-        "現在取り組んでいる学習や業務は、成果や良い影響にどの程度つながっていると感じるか",
-      ),
-      { target: { value: "50" } },
-    );
     fireEvent.click(screen.getByRole("button", { name: "保存" }));
 
-    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit).toHaveBeenCalledWith(
-      expect.objectContaining({
-        worked_on: "Serializerを読んだ",
-        next_action: "短い記事を書く",
-        ai_usage_state: "used",
-        ai_communication_score: 70,
-        outcome_score: 50,
-        deep_dives: [{ content: "コード例を一つ選ぶ" }],
-      }),
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce());
+    expect(onSubmit).toHaveBeenCalledWith({
+      worked_on: "Serializerを読んだ",
+      learned: "検証後のデータを使う",
+      next_action: "短い記事を書く",
+    });
+    expect(onSaved).toHaveBeenCalledOnce();
+  });
+
+  it("未入力で保存すると振り返りを作らず終了する", () => {
+    const onSubmit = vi.fn();
+    const onSkip = vi.fn();
+    render(
+      <ReflectionForm
+        studyRecord={studyRecord}
+        onSubmit={onSubmit}
+        onSaved={vi.fn()}
+        onSkip={onSkip}
+      />,
     );
-    expect(onSaved).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    expect(onSkip).toHaveBeenCalledOnce();
+  });
+
+  it("編集中の内容をすべて消すと振り返りなしへ戻す", async () => {
+    const initialReflection = reflectionResponse({ worked_on: "仮の内容" });
+    const onDelete = vi.fn().mockResolvedValue(undefined);
+    const onDeleted = vi.fn();
+    render(
+      <ReflectionForm
+        studyRecord={studyRecord}
+        initialReflection={initialReflection}
+        onSubmit={vi.fn()}
+        onSaved={vi.fn()}
+        onDelete={onDelete}
+        onDeleted={onDeleted}
+        onSkip={vi.fn()}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText("今回取り組んだこと"), {
+      target: { value: "" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "保存" }));
+
+    expect(
+      screen.getByRole("alertdialog", { name: "振り返りなしに戻しますか？" }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "振り返りなしに戻す" }),
+    );
+
+    await waitFor(() => expect(onDelete).toHaveBeenCalledOnce());
+    expect(onDeleted).toHaveBeenCalledOnce();
   });
 
   it("保存結果が不明な場合は入力を固定して同じ内容だけ再送する", async () => {
@@ -156,7 +134,7 @@ describe("ReflectionForm", () => {
         studyRecord={studyRecord}
         onSubmit={onSubmit}
         onSaved={onSaved}
-        onCancel={vi.fn()}
+        onSkip={vi.fn()}
       />,
     );
 
@@ -168,7 +146,9 @@ describe("ReflectionForm", () => {
       "保存結果を確認できませんでした。",
     );
     expect(workedOn).toBeDisabled();
-    expect(screen.getByRole("button", { name: "キャンセル" })).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "振り返りを書かず終了" }),
+    ).toBeDisabled();
 
     fireEvent.click(
       screen.getByRole("button", { name: "同じ内容で保存結果を確認" }),

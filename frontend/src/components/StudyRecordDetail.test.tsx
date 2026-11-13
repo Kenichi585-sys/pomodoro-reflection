@@ -11,6 +11,7 @@ const studyRecord: StudyRecord = {
   started_at: "2026-11-11T10:00:00+09:00",
   ended_at: "2026-11-11T10:25:00+09:00",
   study_seconds: 1500,
+  goal: "Serializerの保存経路を理解する",
   study_date: "2026-11-11",
   created_at: "2026-11-11T10:25:00+09:00",
   updated_at: "2026-11-11T10:25:00+09:00",
@@ -19,18 +20,8 @@ const studyRecord: StudyRecord = {
 const reflection: Reflection = {
   id: 8,
   worked_on: "Serializerの保存経路",
-  difficulty: "validated_dataの流れ",
-  attempted: "処理を小さく分けた",
-  understanding_change: "検証後のデータだと分かった",
+  learned: "検証後のデータだと分かった",
   next_action: "PATCH更新を確認する",
-  ai_usage_state: "used",
-  ai_communication_score: 70,
-  ai_thinking_score: 80,
-  outcome_score: 60,
-  outcome_evidence: "コードを自分の言葉で説明できた",
-  deep_dives: [
-    { id: 4, content: "更新APIを読む", display_order: 0 },
-  ],
   created_at: "2026-11-11T10:30:00+09:00",
   updated_at: "2026-11-11T10:30:00+09:00",
 };
@@ -48,9 +39,9 @@ describe("StudyRecordDetail", () => {
       />,
     );
 
+    expect(screen.getByText("Serializerの保存経路を理解する")).toBeInTheDocument();
     expect(screen.getByText("Serializerの保存経路")).toBeInTheDocument();
-    expect(screen.getByText("更新APIを読む")).toBeInTheDocument();
-    expect(screen.getByText("70 / 100")).toBeInTheDocument();
+    expect(screen.getByText("検証後のデータだと分かった")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "振り返りを編集" }));
     expect(onEditReflection).toHaveBeenCalledOnce();

@@ -5,16 +5,18 @@ import {
   loadTimerRecoverySnapshot,
   removeTimerRecoverySnapshot,
   saveTimerRecoverySnapshot,
+  TIMER_RECOVERY_VERSION,
   type TimerRecoverySnapshot,
 } from './timerRecovery'
 
 const STORAGE_KEY = 'pomodoro-reflection:test-timer-recovery'
 
 const snapshot: TimerRecoverySnapshot = {
-  version: 3,
+  version: TIMER_RECOVERY_VERSION,
   savedAtMs: 1_700_000_000_000,
   sessionStartedAtMs: 1_699_999_700_000,
   clientUuid: '00000000-0000-4000-8000-000000000001',
+  goal: '復旧処理を確認する',
   presetId: '25-5',
   phase: 'focus',
   breakKind: null,

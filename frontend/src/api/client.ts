@@ -94,9 +94,9 @@ const getCsrfToken = async (): Promise<string> => {
 };
 
 const writeJsonWithCsrf = async <T>(
-  method: "POST" | "PATCH",
+  method: "POST" | "PATCH" | "DELETE",
   url: string,
-  requestBody: object,
+  requestBody?: object,
   uncertainOnServerError = false,
   onRequestStarted?: () => void,
 ): Promise<T> => {
@@ -111,18 +111,16 @@ const writeJsonWithCsrf = async <T>(
   }
 
   onRequestStarted?.();
-  return requestJson<T>(
-    url,
-    {
-      method,
-      headers: {
-        "Content-Type": "application/json",
-        "X-CSRFToken": csrfToken,
-      },
-      body: JSON.stringify(requestBody),
-    },
-    uncertainOnServerError,
-  );
+  const headers: Record<string, string> = {
+    "X-CSRFToken": csrfToken,
+  };
+  const requestInit: RequestInit = { method, headers };
+  if (requestBody !== undefined) {
+    headers["Content-Type"] = "application/json";
+    requestInit.body = JSON.stringify(requestBody);
+  }
+
+  return requestJson<T>(url, requestInit, uncertainOnServerError);
 };
 
 export const postJsonWithCsrf = <T>(
@@ -152,3 +150,7 @@ export const patchJsonWithCsrf = <T>(
     uncertainOnServerError,
     onRequestStarted,
   );
+
+export const deleteWithCsrf = async (url: string): Promise<void> => {
+  await writeJsonWithCsrf<void>("DELETE", url, undefined, true);
+};

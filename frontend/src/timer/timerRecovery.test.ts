@@ -177,6 +177,15 @@ describe('timerRecovery', () => {
         accumulatedFocusMilliseconds: 52 * 60 * 1000,
         completedFocusCount: 1,
       },
+      {
+        ...snapshot,
+        presetId: '52-17',
+        phase: 'waiting',
+        phaseRemainingMilliseconds: 52 * 60 * 1000,
+        phaseDurationMilliseconds: 52 * 60 * 1000,
+        accumulatedFocusMilliseconds: 25 * 60 * 1000,
+        completedFocusCount: 0,
+      },
     ]
 
     validSnapshots.forEach((validSnapshot) => {

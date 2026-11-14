@@ -100,38 +100,23 @@ const isPendingStudyEnd = (
 
 const hasValidAccumulatedFocusTime = (
   phase: TimerRecoveryPhase,
-  breakKind: TimerRecoveryBreakKind,
   focusDurationMilliseconds: number,
   phaseRemainingMilliseconds: number,
   accumulatedFocusMilliseconds: number,
   completedFocusCount: number,
-  focusCountBeforeLongBreak: number | null,
 ) => {
-  const completedFocusIntervals = Math.floor(
-    accumulatedFocusMilliseconds / focusDurationMilliseconds,
-  )
-  const elapsedCurrentFocusMilliseconds =
-    accumulatedFocusMilliseconds % focusDurationMilliseconds
-  const expectedElapsedFocusMilliseconds =
+  const minimumCurrentFocusElapsedMilliseconds =
     phase === 'focus'
       ? focusDurationMilliseconds - phaseRemainingMilliseconds
       : 0
+  const minimumAccumulatedFocusMilliseconds =
+    completedFocusCount * focusDurationMilliseconds +
+    minimumCurrentFocusElapsedMilliseconds
 
-  if (elapsedCurrentFocusMilliseconds !== expectedElapsedFocusMilliseconds) return false
-  if (phase === 'waiting' && completedFocusIntervals === 0) return false
-
-  if (focusCountBeforeLongBreak === null) {
-    return completedFocusIntervals === completedFocusCount
-  }
-
-  if (phase === 'break' && breakKind === 'long') {
-    return (
-      completedFocusIntervals > 0 &&
-      completedFocusIntervals % focusCountBeforeLongBreak === 0
-    )
-  }
-
-  return completedFocusIntervals % focusCountBeforeLongBreak === completedFocusCount
+  return (
+    accumulatedFocusMilliseconds >= minimumAccumulatedFocusMilliseconds &&
+    (phase === 'focus' || accumulatedFocusMilliseconds > 0)
+  )
 }
 
 const hasValidPresetState = (
@@ -150,12 +135,10 @@ const hasValidPresetState = (
 
   if (!hasValidAccumulatedFocusTime(
     phase,
-    breakKind,
     focusDurationMilliseconds,
     phaseRemainingMilliseconds,
     accumulatedFocusMilliseconds,
     completedFocusCount,
-    focusCountBeforeLongBreak,
   )) {
     return false
   }
@@ -175,7 +158,7 @@ const hasValidPresetState = (
       phaseDurationMilliseconds === focusDurationMilliseconds &&
       phaseRemainingMilliseconds === focusDurationMilliseconds &&
       (focusCountBeforeLongBreak === null
-        ? completedFocusCount >= 1
+        ? true
         : completedFocusCount < focusCountBeforeLongBreak)
     )
   }

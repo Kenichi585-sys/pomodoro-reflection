@@ -302,6 +302,11 @@ export const TimerPanel = ({
     status !== "idle" ||
     accumulatedFocusMilliseconds > 0 ||
     completedFocusCount > 0;
+  const canChangePreset =
+    !hasTimerSessionStarted ||
+    (pendingRecoverySnapshot === null &&
+      phase === "waiting" &&
+      status === "idle");
 
   const saveCurrentRecoveryState = useCallback(
     (
@@ -996,10 +1001,13 @@ export const TimerPanel = ({
   };
 
   const changePreset = (nextPresetId: TimerPresetId) => {
+    if (!canChangePreset || nextPresetId === presetId) return;
+
     const nextPreset = timerPresets[nextPresetId];
     const nextFocusDurationMilliseconds = nextPreset.focusSeconds * 1000;
 
     setPresetId(nextPresetId);
+    setCompletedFocusCount(0);
     setPhaseRemainingMilliseconds(nextFocusDurationMilliseconds);
     setPhaseDurationMilliseconds(nextFocusDurationMilliseconds);
     setRemainingAtRunStartMilliseconds(nextFocusDurationMilliseconds);
@@ -1302,7 +1310,7 @@ export const TimerPanel = ({
                 }
                 type="button"
                 key={id}
-                disabled={hasTimerSessionStarted}
+                disabled={!canChangePreset}
                 aria-pressed={id === presetId}
                 onClick={() => changePreset(id)}
               >

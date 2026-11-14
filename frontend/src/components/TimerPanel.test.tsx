@@ -632,6 +632,48 @@ describe('TimerPanel', () => {
     expect(screen.getByLabelText('学習 52:00')).toBeInTheDocument()
   })
 
+  it('学習中は設定を変更できず、休憩後の待機中は次の設定へ変更できる', async () => {
+    const storageKey = createTimerRecoveryStorageKey('guest', false)
+    const firstRender = renderTimerPanel()
+
+    const shortPresetButton = screen.getByRole('button', { name: '25分 / 5分' })
+    const longPresetButton = screen.getByRole('button', { name: '52分 / 17分' })
+
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+    expect(shortPresetButton).toBeDisabled()
+    expect(longPresetButton).toBeDisabled()
+
+    vi.setSystemTime(new Date(Date.now() + 25 * 60 * 1000))
+    await act(async () => vi.advanceTimersByTime(250))
+    vi.setSystemTime(new Date(Date.now() + 5 * 60 * 1000))
+    await act(async () => vi.advanceTimersByTime(250))
+
+    expect(screen.getByText('1 / 4回')).toBeInTheDocument()
+    expect(shortPresetButton).toBeEnabled()
+    expect(longPresetButton).toBeEnabled()
+
+    fireEvent.click(longPresetButton)
+    expect(screen.getByLabelText('次の学習を待機中 52:00')).toBeInTheDocument()
+    expect(loadTimerRecoverySnapshot(localStorage, storageKey)).toMatchObject({
+      status: 'loaded',
+      snapshot: {
+        presetId: '52-17',
+        phase: 'waiting',
+        accumulatedFocusMilliseconds: 25 * 60 * 1000,
+        completedFocusCount: 0,
+      },
+    })
+
+    firstRender.unmount()
+    renderTimerPanel()
+    fireEvent.click(screen.getByRole('button', { name: '前回の続きから再開' }))
+    expect(screen.getByLabelText('次の学習を待機中 52:00')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '25分 / 5分' }))
+    expect(screen.getByLabelText('次の学習を待機中 25:00')).toBeInTheDocument()
+    expect(screen.getByText('0 / 4回')).toBeInTheDocument()
+  })
+
   it('開発用URLでは7秒で学習と休憩の切り替えを確認できる', async () => {
     window.history.replaceState(null, '', '/?timerTest=1')
     renderTimerPanel()

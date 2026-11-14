@@ -263,6 +263,12 @@ export const StudyHistory = ({
                           <p>{record.reflection.learned}</p>
                         </div>
                       )}
+                      {record.reflection.impressions && (
+                        <div>
+                          <h3>学習を通して感じたこと</h3>
+                          <p>{record.reflection.impressions}</p>
+                        </div>
+                      )}
                       {record.reflection.next_action && (
                         <div>
                           <h3>次にやること</h3>

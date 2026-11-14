@@ -21,6 +21,7 @@ const reflection: Reflection = {
   id: 8,
   worked_on: "Serializerの保存経路",
   learned: "検証後のデータだと分かった",
+  impressions: "理解前より単純に感じた",
   next_action: "PATCH更新を確認する",
   created_at: "2026-11-11T10:30:00+09:00",
   updated_at: "2026-11-11T10:30:00+09:00",
@@ -42,6 +43,7 @@ describe("StudyRecordDetail", () => {
     expect(screen.getByText("Serializerの保存経路を理解する")).toBeInTheDocument();
     expect(screen.getByText("Serializerの保存経路")).toBeInTheDocument();
     expect(screen.getByText("検証後のデータだと分かった")).toBeInTheDocument();
+    expect(screen.getByText("理解前より単純に感じた")).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "振り返りを編集" }));
     expect(onEditReflection).toHaveBeenCalledOnce();

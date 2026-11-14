@@ -18,6 +18,7 @@ from .serializers import (
 REFLECTION_VALUE_FIELDS = (
     "worked_on",
     "learned",
+    "impressions",
     "next_action",
 )
 

@@ -281,6 +281,7 @@ describe('App', () => {
       id: 3,
       worked_on: 'Serializerを読んだ',
       learned: '',
+      impressions: '',
       next_action: '',
       created_at: '2026-11-11T09:26:00+09:00',
       updated_at: '2026-11-11T09:26:00+09:00',

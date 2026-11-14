@@ -46,6 +46,9 @@ export const ReflectionForm = ({
 }: ReflectionFormProps) => {
   const [workedOn, setWorkedOn] = useState(initialReflection?.worked_on ?? "");
   const [learned, setLearned] = useState(initialReflection?.learned ?? "");
+  const [impressions, setImpressions] = useState(
+    initialReflection?.impressions ?? "",
+  );
   const [nextAction, setNextAction] = useState(
     initialReflection?.next_action ?? "",
   );
@@ -74,12 +77,14 @@ export const ReflectionForm = ({
   const input: ReflectionInput = {
     worked_on: workedOn.trim(),
     learned: learned.trim(),
+    impressions: impressions.trim(),
     next_action: nextAction.trim(),
   };
   const hasInput = Object.values(input).some(Boolean);
   const hasChanges =
     workedOn !== (initialReflection?.worked_on ?? "") ||
     learned !== (initialReflection?.learned ?? "") ||
+    impressions !== (initialReflection?.impressions ?? "") ||
     nextAction !== (initialReflection?.next_action ?? "");
 
   const handleSkip = () => {
@@ -209,6 +214,21 @@ export const ReflectionForm = ({
             onChange={(event) => setLearned(event.target.value)}
           />
           {fieldError("learned")}
+
+          <label htmlFor="reflection-impressions">
+            学習を通して感じたこと
+          </label>
+          <p id="reflection-impressions-help" className="reflection-help-text">
+            学習前後で変わった印象や、難しかった・意外だったと感じたことなど
+          </p>
+          <textarea
+            id="reflection-impressions"
+            aria-describedby="reflection-impressions-help"
+            rows={4}
+            value={impressions}
+            onChange={(event) => setImpressions(event.target.value)}
+          />
+          {fieldError("impressions")}
 
           <label htmlFor="reflection-next-action">次にやること</label>
           <textarea

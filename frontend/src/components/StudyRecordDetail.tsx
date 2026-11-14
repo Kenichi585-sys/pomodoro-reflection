@@ -55,6 +55,10 @@ export const StudyRecordDetail = ({
       <DetailField label="今回の目標" value={studyRecord.goal} />
       <DetailField label="今回取り組んだこと" value={reflection.worked_on} />
       <DetailField label="分かったこと" value={reflection.learned} />
+      <DetailField
+        label="学習を通して感じたこと"
+        value={reflection.impressions}
+      />
       <DetailField label="次にやること" value={reflection.next_action} />
     </div>
 

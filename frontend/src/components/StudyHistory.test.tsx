@@ -28,6 +28,7 @@ const firstPage: StudyHistoryResponse = {
             id: 1,
             worked_on: "Serializerを読んだ",
             learned: "検証済みデータを使う理由が分かった",
+            impressions: "思っていたより役割が明確だった",
             next_action: "記事の下書きを作る",
             created_at: "2026-11-13T10:30:00+09:00",
             updated_at: "2026-11-13T10:30:00+09:00",
@@ -94,6 +95,9 @@ describe("StudyHistory", () => {
     ).toBeInTheDocument();
     expect(
       screen.getByText("検証済みデータを使う理由が分かった"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("思っていたより役割が明確だった"),
     ).toBeInTheDocument();
     expect(screen.getAllByText("25分")).toHaveLength(2);
 

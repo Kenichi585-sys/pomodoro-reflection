@@ -54,6 +54,7 @@ class ReflectionSerializer(serializers.ModelSerializer):
             "id",
             "worked_on",
             "learned",
+            "impressions",
             "next_action",
             "created_at",
             "updated_at",
@@ -70,7 +71,12 @@ class ReflectionSerializer(serializers.ModelSerializer):
 
         if not any(
             (current_value(field_name) or "").strip()
-            for field_name in ("worked_on", "learned", "next_action")
+            for field_name in (
+                "worked_on",
+                "learned",
+                "impressions",
+                "next_action",
+            )
         ):
             raise serializers.ValidationError(
                 {"non_field_errors": "振り返りを1項目以上入力してください。"}

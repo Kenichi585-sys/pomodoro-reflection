@@ -63,11 +63,16 @@ class ReflectionApiTests(TestCase):
             {
                 "worked_on": "Serializerの流れを読んだ",
                 "learned": "検証後のデータを使うと分かった",
+                "impressions": "思っていたより流れは単純だった",
                 "next_action": "短い記事にまとめる",
             }
         )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(
+            response.json()["impressions"],
+            "思っていたより流れは単純だった",
+        )
         self.assertEqual(Reflection.objects.count(), 1)
 
         update_response = self.patch({"next_action": "記事を読み返す"})

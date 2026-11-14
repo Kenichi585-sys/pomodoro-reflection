@@ -7,6 +7,7 @@ import {
 export type ReflectionInput = {
   worked_on?: string;
   learned?: string;
+  impressions?: string;
   next_action?: string;
 };
 

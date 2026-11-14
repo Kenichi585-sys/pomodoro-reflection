@@ -23,6 +23,7 @@ describe("reflection API", () => {
       id: 1,
       worked_on: "Serializerを読んだ",
       learned: "検証後の値を使う",
+      impressions: "理解前より単純に感じた",
       next_action: "",
       created_at: "2026-11-11T00:00:00Z",
       updated_at: "2026-11-11T00:00:00Z",

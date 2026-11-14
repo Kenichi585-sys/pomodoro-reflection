@@ -802,6 +802,13 @@
   line-height: 1.6;
 }
 
+.reflection-help-text {
+  margin: 2px 0 8px;
+  color: #bdbdbd;
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
 .reflection-card textarea,
 .reflection-card select {
   width: 100%;

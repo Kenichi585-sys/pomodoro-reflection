@@ -139,6 +139,7 @@ class Reflection(models.Model):
     )
     worked_on = models.TextField("今回取り組んだこと", blank=True)
     learned = models.TextField("分かったこと", blank=True)
+    impressions = models.TextField("学習を通して感じたこと", blank=True, default="")
     next_action = models.TextField("次にやること", blank=True)
     created_at = models.DateTimeField("作成日時", auto_now_add=True)
     updated_at = models.DateTimeField("更新日時", auto_now=True)

@@ -22,6 +22,7 @@ const reflectionResponse = (input: ReflectionInput): Reflection => ({
   id: 1,
   worked_on: input.worked_on ?? "",
   learned: input.learned ?? "",
+  impressions: input.impressions ?? "",
   next_action: input.next_action ?? "",
   created_at: "2026-11-11T09:26:00+09:00",
   updated_at: "2026-11-11T09:26:00+09:00",
@@ -33,7 +34,7 @@ describe("ReflectionForm", () => {
     vi.restoreAllMocks();
   });
 
-  it("今回の目標を確認し、3項目を保存する", async () => {
+  it("今回の目標を確認し、4項目を保存する", async () => {
     const onSubmit = vi.fn(async (input: ReflectionInput) =>
       reflectionResponse(input),
     );
@@ -56,6 +57,14 @@ describe("ReflectionForm", () => {
     fireEvent.change(screen.getByLabelText("分かったこと"), {
       target: { value: "検証後のデータを使う" },
     });
+    expect(
+      screen.getByText(
+        "学習前後で変わった印象や、難しかった・意外だったと感じたことなど",
+      ),
+    ).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("学習を通して感じたこと"), {
+      target: { value: "思っていたより流れは単純だった" },
+    });
     fireEvent.change(screen.getByLabelText("次にやること"), {
       target: { value: "短い記事を書く" },
     });
@@ -65,6 +74,7 @@ describe("ReflectionForm", () => {
     expect(onSubmit).toHaveBeenCalledWith({
       worked_on: "Serializerを読んだ",
       learned: "検証後のデータを使う",
+      impressions: "思っていたより流れは単純だった",
       next_action: "短い記事を書く",
     });
     expect(onSaved).toHaveBeenCalledOnce();

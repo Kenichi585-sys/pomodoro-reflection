@@ -217,6 +217,13 @@ export const StudyHistory = ({
           <strong>{formatStudyTime(totalStudySeconds)}</strong>
         </p>
       </header>
+      <button
+        className="secondary-button study-history-back-button"
+        type="button"
+        onClick={onBack}
+      >
+        今回の目標へ戻る
+      </button>
 
       {errorMessage && (
         <p className="form-error" role="alert">
@@ -346,9 +353,6 @@ export const StudyHistory = ({
             さらに読み込む
           </button>
         )}
-        <button className="text-button" type="button" onClick={onBack}>
-          今回の目標へ戻る
-        </button>
       </div>
     </section>
   );

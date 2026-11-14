@@ -78,11 +78,13 @@ const App = () => {
 
   const showTimerAsGuest = () => {
     localStorage.setItem(GUEST_CHOICE_KEY, "true");
+    setStartupError("");
     setScreen("timer");
   };
 
   const handleAuthSuccess = (authenticatedUser: AuthUser) => {
     localStorage.removeItem(GUEST_CHOICE_KEY);
+    setStartupError("");
     setUser(authenticatedUser);
     setScreen("timer");
   };

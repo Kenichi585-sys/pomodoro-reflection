@@ -115,6 +115,38 @@ describe('App', () => {
     )
   })
 
+  it('起動時のエラーをログイン成功後の画面に残さない', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse({}, 400))
+      .mockResolvedValueOnce(jsonResponse({ csrf_token: 'csrf-token' }))
+      .mockResolvedValueOnce(
+        jsonResponse({ user: { email: 'User@example.com' } }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+
+    render(<App />)
+
+    expect(
+      await screen.findByText('入力内容を確認してください。'),
+    ).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'ログイン' }))
+    fireEvent.change(screen.getByLabelText('メールアドレス'), {
+      target: { value: 'user@example.com' },
+    })
+    fireEvent.change(screen.getByLabelText('パスワード'), {
+      target: { value: 'safe-test-password-123' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'ログイン' }))
+
+    expect(
+      await screen.findByRole('heading', { name: '今回の目標を決める' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByText('入力内容を確認してください。'),
+    ).not.toBeInTheDocument()
+  })
+
   it('ログイン中もタイマー開始後はアカウント操作を無効にする', async () => {
     vi.stubGlobal(
       'fetch',

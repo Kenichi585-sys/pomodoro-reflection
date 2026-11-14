@@ -608,6 +608,16 @@
   font-variant-numeric: tabular-nums;
 }
 
+.study-history-back-button {
+  position: sticky;
+  z-index: 2;
+  top: 12px;
+  display: block;
+  width: fit-content;
+  margin: 18px 0 0 auto;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 42%);
+}
+
 .study-history-groups,
 .study-history-records {
   display: grid;
@@ -1047,6 +1057,10 @@
     justify-items: start;
   }
 
+  .study-history-back-button {
+    width: 100%;
+  }
+
   .study-history-record-actions {
     align-items: stretch;
     flex-direction: column;
@@ -1062,6 +1076,39 @@
   .reflection-score-list div {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+}
+
+@media (max-height: 800px) {
+  .main-content:has(.goal-setup-field) {
+    place-items: start center;
+    padding: 20px 18px;
+  }
+
+  .main-content:has(.goal-setup-field) .welcome-card {
+    padding: 24px 28px;
+  }
+
+  .main-content:has(.goal-setup-field) .eyebrow {
+    margin-bottom: 6px;
+  }
+
+  .main-content:has(.goal-setup-field) h1 {
+    font-size: 1.7rem;
+  }
+
+  .main-content:has(.goal-setup-field) .goal-setup-field {
+    margin-top: 16px;
+  }
+
+  .main-content:has(.goal-setup-field) .goal-setup-field textarea {
+    min-height: 96px;
+    max-height: 140px;
+  }
+
+  .main-content:has(.goal-setup-field) .welcome-actions {
+    gap: 10px;
+    margin-top: 20px;
   }
 }
 

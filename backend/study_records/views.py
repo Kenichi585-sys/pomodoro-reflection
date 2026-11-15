@@ -45,6 +45,7 @@ class StudyRecordCreateView(APIView):
         serializer = StudyRecordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         client_uuid = serializer.validated_data["client_uuid"]
+        # 同じ記録がすでに保存されていないか確認する
         existing_record = StudyRecord.objects.filter(
             user=request.user,
             client_uuid=client_uuid,

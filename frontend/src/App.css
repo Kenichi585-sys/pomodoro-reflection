@@ -457,6 +457,8 @@
   margin: 7px 0 0;
   font-size: 1.15rem;
   font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .sound-controls {
@@ -558,6 +560,15 @@
 .timer-goal-summary .text-button {
   min-height: auto;
   padding: 0;
+}
+
+.timer-stage.is-break .timer-goal-summary {
+  border-color: rgb(7 23 29 / 18%);
+  background: rgb(255 255 255 / 48%);
+}
+
+.timer-stage.is-break .timer-goal-summary h2 {
+  color: #0b637c;
 }
 
 .timer-goal-edit {

@@ -29,6 +29,7 @@ export type TimerRecoverySnapshot = {
   phaseDurationMilliseconds: number
   accumulatedFocusMilliseconds: number
   completedFocusCount: number
+  completedFocusCountPresetId?: TimerPresetId
   pendingStudyEnd: TimerRecoveryPendingStudyEnd | null
 }
 
@@ -101,6 +102,7 @@ const isPendingStudyEnd = (
 const hasValidAccumulatedFocusTime = (
   phase: TimerRecoveryPhase,
   focusDurationMilliseconds: number,
+  completedFocusDurationMilliseconds: number,
   phaseRemainingMilliseconds: number,
   accumulatedFocusMilliseconds: number,
   completedFocusCount: number,
@@ -110,7 +112,7 @@ const hasValidAccumulatedFocusTime = (
       ? focusDurationMilliseconds - phaseRemainingMilliseconds
       : 0
   const minimumAccumulatedFocusMilliseconds =
-    completedFocusCount * focusDurationMilliseconds +
+    completedFocusCount * completedFocusDurationMilliseconds +
     minimumCurrentFocusElapsedMilliseconds
 
   return (
@@ -128,14 +130,23 @@ const hasValidPresetState = (
   phaseDurationMilliseconds: number,
   accumulatedFocusMilliseconds: number,
   completedFocusCount: number,
+  completedFocusCountPresetId: TimerPresetId,
 ) => {
   const preset = timerPresets[presetId]
+  const completedFocusCountPreset = timerPresets[completedFocusCountPresetId]
   const focusDurationMilliseconds = preset.focusSeconds * 1000
+  const completedFocusDurationMilliseconds =
+    completedFocusCountPreset.focusSeconds * 1000
   const focusCountBeforeLongBreak = preset.focusCountBeforeLongBreak
+
+  if (phase !== 'waiting' && completedFocusCountPresetId !== presetId) {
+    return false
+  }
 
   if (!hasValidAccumulatedFocusTime(
     phase,
     focusDurationMilliseconds,
+    completedFocusDurationMilliseconds,
     phaseRemainingMilliseconds,
     accumulatedFocusMilliseconds,
     completedFocusCount,
@@ -166,7 +177,7 @@ const hasValidPresetState = (
   if (breakKind === 'short') {
     return (
       phaseDurationMilliseconds === preset.shortBreakSeconds * 1000 &&
-      completedFocusCount >= 1 &&
+      (focusCountBeforeLongBreak === null || completedFocusCount >= 1) &&
       (focusCountBeforeLongBreak === null ||
         completedFocusCount < focusCountBeforeLongBreak)
     )
@@ -200,6 +211,7 @@ const isTimerRecoverySnapshot = (
     phaseDurationMilliseconds,
     accumulatedFocusMilliseconds,
     completedFocusCount,
+    completedFocusCountPresetId,
     pendingStudyEnd,
   } = value
 
@@ -219,6 +231,8 @@ const isTimerRecoverySnapshot = (
     phaseRemainingMilliseconds <= phaseDurationMilliseconds &&
     isNonNegativeSafeNumber(accumulatedFocusMilliseconds) &&
     isNonNegativeSafeNumber(completedFocusCount) &&
+    (completedFocusCountPresetId === undefined ||
+      isTimerPresetId(completedFocusCountPresetId)) &&
     (pendingStudyEnd === null ||
       isPendingStudyEnd(pendingStudyEnd, sessionStartedAtMs, savedAtMs)) &&
     hasValidPresetState(
@@ -230,6 +244,7 @@ const isTimerRecoverySnapshot = (
       phaseDurationMilliseconds,
       accumulatedFocusMilliseconds,
       completedFocusCount,
+      completedFocusCountPresetId ?? presetId,
     )
   )
 }

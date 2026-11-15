@@ -660,7 +660,8 @@ describe('TimerPanel', () => {
         presetId: '52-17',
         phase: 'waiting',
         accumulatedFocusMilliseconds: 25 * 60 * 1000,
-        completedFocusCount: 0,
+        completedFocusCount: 1,
+        completedFocusCountPresetId: '25-5',
       },
     })
 
@@ -671,6 +672,27 @@ describe('TimerPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '25分 / 5分' }))
     expect(screen.getByLabelText('次の学習を待機中 25:00')).toBeInTheDocument()
+    expect(screen.getByText('1 / 4回')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '52分 / 17分' }))
+    fireEvent.click(screen.getByRole('button', { name: '学習を始める' }))
+    expect(screen.getByRole('button', { name: '25分 / 5分' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '52分 / 17分' })).toBeDisabled()
+    expect(loadTimerRecoverySnapshot(localStorage, storageKey)).toMatchObject({
+      status: 'loaded',
+      snapshot: {
+        presetId: '52-17',
+        completedFocusCount: 0,
+        completedFocusCountPresetId: '52-17',
+      },
+    })
+
+    vi.setSystemTime(new Date(Date.now() + 52 * 60 * 1000))
+    await act(async () => vi.advanceTimersByTime(250))
+    vi.setSystemTime(new Date(Date.now() + 17 * 60 * 1000))
+    await act(async () => vi.advanceTimersByTime(250))
+
+    fireEvent.click(screen.getByRole('button', { name: '25分 / 5分' }))
     expect(screen.getByText('0 / 4回')).toBeInTheDocument()
   })
 

@@ -39,13 +39,20 @@ type Screen =
 const GUEST_CHOICE_KEY = "pomodoro-reflection:guest-choice";
 
 const App = () => {
+  // 現在表示している画面。
   const [screen, setScreen] = useState<Screen>("loading");
+  // ログイン中の利用者。未ログイン時はnull。
   const [user, setUser] = useState<AuthUser | null>(null);
+  // アカウントメニューを表示しているか。
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  // タイマー動作中など、別画面への移動を禁止しているか。
   const [isTimerNavigationLocked, setIsTimerNavigationLocked] = useState(false);
+  // アプリ起動時の処理に失敗した場合に表示するメッセージ。
   const [startupError, setStartupError] = useState("");
+  // 振り返りの対象となる、保存済みの学習記録。
   const [reflectionStudyRecord, setReflectionStudyRecord] =
     useState<StudyRecord | null>(null);
+  // Djangoから返され、画面表示や編集に使う保存済みの振り返り。
   const [savedReflection, setSavedReflection] = useState<Reflection | null>(
     null,
   );

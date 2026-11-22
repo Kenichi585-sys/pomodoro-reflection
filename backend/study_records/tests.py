@@ -169,6 +169,25 @@ class StudyRecordCreateApiTests(TestCase):
         self.assertEqual(summary_response.status_code, status.HTTP_200_OK)
         self.assertEqual(summary_response.json()["study_seconds"], 25 * 60)
 
+        requested_date_response = self.client.get(
+            "/api/study-records/today-summary/",
+            {"study_date": record.study_date.isoformat()},
+        )
+        self.assertEqual(requested_date_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            requested_date_response.json()["study_seconds"],
+            25 * 60,
+        )
+
+        invalid_date_response = self.client.get(
+            "/api/study-records/today-summary/",
+            {"study_date": "invalid-date"},
+        )
+        self.assertEqual(
+            invalid_date_response.status_code,
+            status.HTTP_400_BAD_REQUEST,
+        )
+
         Reflection.objects.create(
             study_record=record,
             worked_on="APIを確認した",

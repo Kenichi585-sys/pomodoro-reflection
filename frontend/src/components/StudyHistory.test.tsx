@@ -192,7 +192,7 @@ describe("StudyHistory", () => {
         .toBeInTheDocument(),
     );
     fireEvent.click(
-      screen.getByRole("button", { name: "今回の目標へ戻る" }),
+      screen.getByRole("button", { name: "目標設定画面へ戻る" }),
     );
     expect(onBack).toHaveBeenCalledOnce();
   });

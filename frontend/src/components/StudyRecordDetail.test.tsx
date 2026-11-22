@@ -30,13 +30,14 @@ const reflection: Reflection = {
 describe("StudyRecordDetail", () => {
   it("保存した振り返りを表示し、編集操作を渡す", () => {
     const onEditReflection = vi.fn();
+    const onBackToGoalSetup = vi.fn();
 
     render(
       <StudyRecordDetail
         studyRecord={studyRecord}
         reflection={reflection}
         onEditReflection={onEditReflection}
-        onStartNewStudy={vi.fn()}
+        onBackToGoalSetup={onBackToGoalSetup}
       />,
     );
 
@@ -47,5 +48,9 @@ describe("StudyRecordDetail", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "振り返りを編集" }));
     expect(onEditReflection).toHaveBeenCalledOnce();
+    fireEvent.click(
+      screen.getByRole("button", { name: "目標設定画面へ戻る" }),
+    );
+    expect(onBackToGoalSetup).toHaveBeenCalledOnce();
   });
 });

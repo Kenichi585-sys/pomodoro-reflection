@@ -21,6 +21,7 @@ import {
 } from "../timer/timerConfig";
 import {
   createTimerRecoveryStorageKey,
+  isTimerRecoverySnapshotExpired,
   loadTimerRecoverySnapshot,
   removeTimerRecoverySnapshot,
   saveTimerRecoverySnapshot,
@@ -39,7 +40,7 @@ type TimerPanelProps = {
     input: CreateStudyRecordInput,
     options?: CreateStudyRecordOptions,
   ) => Promise<StudyRecord>;
-  loadTodayStudySeconds?: () => Promise<number>;
+  loadStudySecondsForDate?: (studyDate: string) => Promise<number>;
   loadStudyHistory?: (offset?: number) => Promise<StudyHistoryResponse>;
   deleteStudyRecord?: (studyRecordId: number) => Promise<void>;
   createReflection?: (
@@ -75,6 +76,13 @@ const formatLocalDateKey = (date = new Date()): string => {
   return `${year}-${month}-${day}`;
 };
 
+const normalizeGoal = (value: string): string =>
+  value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+
 const millisecondsUntilNextDay = (): number => {
   const now = new Date();
   const nextDay = new Date(now);
@@ -94,6 +102,14 @@ const loadInitialRecoveryState = (
     );
 
     if (result.status === "loaded") {
+      if (isTimerRecoverySnapshotExpired(result.snapshot)) {
+        removeTimerRecoverySnapshot(window.localStorage, storageKey);
+        return {
+          snapshot: null,
+          warning:
+            "前回のタイマーは最後の保存から12時間以上経過したためリセットしました。",
+        };
+      }
       return { snapshot: result.snapshot, warning: "" };
     }
     if (result.status === "invalid") {
@@ -145,7 +161,7 @@ export const TimerPanel = ({
   showStudyTime,
   recoveryOwnerKey,
   onCreateStudyRecord,
-  loadTodayStudySeconds,
+  loadStudySecondsForDate,
   loadStudyHistory,
   deleteStudyRecord,
   createReflection,
@@ -195,8 +211,8 @@ export const TimerPanel = ({
     deletedDuringMountTodayStudySeconds,
     setDeletedDuringMountTodayStudySeconds,
   ] = useState(0);
-  // 「今日の学習時間」を集計する対象日。日付が変わった時に更新する。
-  const [todayStudyDate, setTodayStudyDate] = useState(formatLocalDateKey);
+  // 現在の暦日。日付を跨いだセッションの終了後に、表示対象を当日へ切り替えるために使う。
+  const [calendarDate, setCalendarDate] = useState(formatLocalDateKey);
   // 今日の学習時間を取得できなかった時に表示するメッセージ。
   const [todaySummaryWarning, setTodaySummaryWarning] = useState("");
   // 選択中の「25分／5分」または「52分／17分」。
@@ -276,6 +292,10 @@ export const TimerPanel = ({
   } = useBreakMusic();
 
   const preset = timerPresets[presetId];
+  const studySummaryDate =
+    sessionStartedAtMs === null
+      ? calendarDate
+      : formatLocalDateKey(new Date(sessionStartedAtMs));
   const isRunning = status === "running";
   const visibleRemainingMilliseconds = isRunning
     ? calculateRemainingMilliseconds(
@@ -300,9 +320,9 @@ export const TimerPanel = ({
   const sessionStudySeconds = Math.floor(
     (accumulatedFocusMilliseconds + activeFocusElapsedMilliseconds) / 1000,
   );
-  const sessionStudySecondsForToday =
+  const sessionStudySecondsForSummaryDate =
     sessionStartedAtMs !== null &&
-    formatLocalDateKey(new Date(sessionStartedAtMs)) === todayStudyDate
+    formatLocalDateKey(new Date(sessionStartedAtMs)) === studySummaryDate
       ? sessionStudySeconds
       : 0;
   const todayStudySeconds = Math.max(
@@ -310,7 +330,7 @@ export const TimerPanel = ({
     initialTodayStudySeconds +
       savedDuringMountStudySeconds -
       deletedDuringMountTodayStudySeconds +
-      sessionStudySecondsForToday,
+      sessionStudySecondsForSummaryDate,
   );
   const remainingRatio =
     phaseDurationMilliseconds === 0
@@ -437,41 +457,17 @@ export const TimerPanel = ({
   }, [hasTimerSessionStarted, onTimerNavigationLockChange]);
 
   useEffect(() => {
-    if (loadTodayStudySeconds === undefined) return;
-
     let isActive = true;
     let dayChangeTimeoutId: number | null = null;
-
-    const loadSummary = (expectedStudyDate: string) => {
-      void loadTodayStudySeconds()
-        .then((studySeconds) => {
-          if (isActive && formatLocalDateKey() === expectedStudyDate) {
-            setInitialTodayStudySeconds(studySeconds);
-            setTodaySummaryWarning("");
-          }
-        })
-        .catch(() => {
-          if (isActive && formatLocalDateKey() === expectedStudyDate) {
-            setTodaySummaryWarning("今日の学習時間を取得できませんでした。");
-          }
-        });
-    };
 
     const scheduleDayChange = () => {
       dayChangeTimeoutId = window.setTimeout(() => {
         if (!isActive) return;
-        const nextStudyDate = formatLocalDateKey();
-        setTodayStudyDate(nextStudyDate);
-        setInitialTodayStudySeconds(0);
-        setSavedDuringMountStudySeconds(0);
-        setDeletedDuringMountTodayStudySeconds(0);
-        loadSummary(nextStudyDate);
+        setCalendarDate(formatLocalDateKey());
         scheduleDayChange();
       }, millisecondsUntilNextDay());
     };
 
-    const initialStudyDate = formatLocalDateKey();
-    loadSummary(initialStudyDate);
     scheduleDayChange();
 
     return () => {
@@ -480,7 +476,31 @@ export const TimerPanel = ({
         window.clearTimeout(dayChangeTimeoutId);
       }
     };
-  }, [loadTodayStudySeconds]);
+  }, []);
+
+  useEffect(() => {
+    if (loadStudySecondsForDate === undefined) return;
+
+    let isActive = true;
+    setInitialTodayStudySeconds(0);
+    setSavedDuringMountStudySeconds(0);
+    setDeletedDuringMountTodayStudySeconds(0);
+
+    void loadStudySecondsForDate(studySummaryDate)
+      .then((studySeconds) => {
+        if (!isActive) return;
+        setInitialTodayStudySeconds(studySeconds);
+        setTodaySummaryWarning("");
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setTodaySummaryWarning("今日の学習時間を取得できませんでした。");
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [loadStudySecondsForDate, studySummaryDate]);
 
   useEffect(() => {
     return () => onTimerNavigationLockChange(false);
@@ -898,7 +918,7 @@ export const TimerPanel = ({
           started_at: new Date(sessionStartedAtMs).toISOString(),
           ended_at: new Date(pendingStudyEnd.endedAtMs).toISOString(),
           study_seconds: pendingStudyEnd.studySeconds,
-          goal: goal.trim(),
+          goal: normalizeGoal(goal),
         },
         {
           onRequestStarted: () => {
@@ -908,7 +928,7 @@ export const TimerPanel = ({
         },
       );
       const savedStudySeconds = pendingStudyEnd.studySeconds;
-      if (studyRecord.study_date === todayStudyDate) {
+      if (studyRecord.study_date === studySummaryDate) {
         setSavedDuringMountStudySeconds(
           (currentStudySeconds) => currentStudySeconds + savedStudySeconds,
         );
@@ -1010,7 +1030,7 @@ export const TimerPanel = ({
   };
 
   const handleHistoryRecordDeleted = (studyRecord: StudyHistoryRecord) => {
-    if (studyRecord.study_date !== todayStudyDate) return;
+    if (studyRecord.study_date !== studySummaryDate) return;
     setDeletedDuringMountTodayStudySeconds(
       (currentSeconds) => currentSeconds + studyRecord.study_seconds,
     );
@@ -1020,6 +1040,11 @@ export const TimerPanel = ({
     setSessionCompletion(null);
     setGoal("");
     if (onCreateStudyRecord !== undefined) setIsGoalSetupVisible(true);
+  };
+
+  const proceedToTimer = () => {
+    setGoal((currentGoal) => normalizeGoal(currentGoal));
+    setIsGoalSetupVisible(false);
   };
 
   const skipBreakAndStartFocus = () => {
@@ -1285,7 +1310,7 @@ export const TimerPanel = ({
         <button
           className="primary-button"
           type="button"
-          onClick={() => setIsGoalSetupVisible(false)}
+          onClick={proceedToTimer}
         >
           タイマーへ進む
         </button>

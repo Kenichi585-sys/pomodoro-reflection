@@ -5,6 +5,7 @@ import {
 } from './timerConfig'
 
 export const TIMER_RECOVERY_VERSION = 4
+export const TIMER_RECOVERY_MAX_INACTIVE_MILLISECONDS = 12 * 60 * 60 * 1000
 const TIMER_RECOVERY_STORAGE_KEY_PREFIX = 'pomodoro-reflection:timer-recovery'
 
 export type TimerRecoveryPhase = 'focus' | 'break' | 'waiting'
@@ -38,6 +39,14 @@ export type TimerRecoveryLoadResult =
   | { status: 'loaded'; snapshot: TimerRecoverySnapshot }
   | { status: 'invalid' }
   | { status: 'unavailable' }
+
+export const isTimerRecoverySnapshotExpired = (
+  snapshot: Pick<TimerRecoverySnapshot, 'savedAtMs'>,
+  currentTimeMs = Date.now(),
+) =>
+  snapshot.savedAtMs > currentTimeMs ||
+  currentTimeMs - snapshot.savedAtMs >
+    TIMER_RECOVERY_MAX_INACTIVE_MILLISECONDS
 
 type TimerRecoveryStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type TimerRecoveryPresets = Readonly<Record<TimerPresetId, TimerPreset>>

@@ -4,6 +4,7 @@ import { ApiError } from "../api/client";
 import type { Reflection, ReflectionInput } from "../api/reflections";
 import type { StudyRecord } from "../api/studyRecords";
 import { formatStudyTime } from "../timer/timerConfig";
+import { formatStudyPeriod } from "../timer/studyPeriod";
 
 type ReflectionFormProps = {
   studyRecord: Pick<
@@ -16,23 +17,6 @@ type ReflectionFormProps = {
   onDelete?: () => Promise<void>;
   onDeleted?: () => void;
   onSkip: () => void;
-};
-
-const formatStudyPeriod = (
-  studyRecord: Pick<StudyRecord, "started_at" | "ended_at">,
-): string => {
-  const startedAt = new Date(studyRecord.started_at);
-  const endedAt = new Date(studyRecord.ended_at);
-  const date = new Intl.DateTimeFormat("ja-JP", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(startedAt);
-  const timeFormatter = new Intl.DateTimeFormat("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return `${date} ${timeFormatter.format(startedAt)}〜${timeFormatter.format(endedAt)}`;
 };
 
 export const ReflectionForm = ({
@@ -189,7 +173,7 @@ export const ReflectionForm = ({
         {initialReflection ? "振り返りを編集" : "振り返り"}
       </h1>
       <p className="reflection-study-summary">
-        {formatStudyPeriod(studyRecord)}
+        {formatStudyPeriod(studyRecord.started_at, studyRecord.ended_at)}
         <span>学習時間 {formatStudyTime(studyRecord.study_seconds)}</span>
       </p>
 

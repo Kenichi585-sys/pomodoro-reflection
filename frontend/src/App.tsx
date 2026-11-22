@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   getSession,
@@ -18,7 +18,7 @@ import {
   createStudyRecord,
   deleteStudyRecord,
   getStudyHistory,
-  getTodayStudySeconds,
+  getStudySecondsForDate,
   type StudyRecord,
 } from "./api/studyRecords";
 import { AuthForm, type AuthFormMode } from "./components/AuthForm";
@@ -45,6 +45,8 @@ const App = () => {
   const [user, setUser] = useState<AuthUser | null>(null);
   // アカウントメニューを表示しているか。
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  // アカウントメニューと開閉ボタンを含む領域。
+  const accountAreaRef = useRef<HTMLDivElement>(null);
   // タイマー動作中など、別画面への移動を禁止しているか。
   const [isTimerNavigationLocked, setIsTimerNavigationLocked] = useState(false);
   // アプリ起動時の処理に失敗した場合に表示するメッセージ。
@@ -82,6 +84,30 @@ const App = () => {
       isSessionRequestActive = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isAccountMenuOpen) return;
+
+    const closeAccountMenuOnOutsideClick = (event: PointerEvent) => {
+      if (
+        event.target instanceof Node &&
+        accountAreaRef.current?.contains(event.target)
+      ) {
+        return;
+      }
+      setIsAccountMenuOpen(false);
+    };
+    const closeAccountMenuOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setIsAccountMenuOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeAccountMenuOnOutsideClick);
+    document.addEventListener("keydown", closeAccountMenuOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeAccountMenuOnOutsideClick);
+      document.removeEventListener("keydown", closeAccountMenuOnEscape);
+    };
+  }, [isAccountMenuOpen]);
 
   const showTimerAsGuest = () => {
     localStorage.setItem(GUEST_CHOICE_KEY, "true");
@@ -123,7 +149,7 @@ const App = () => {
     setScreen("reflection-detail");
   };
 
-  const returnToNewTimer = () => {
+  const returnToGoalSetup = () => {
     setReflectionStudyRecord(null);
     setSavedReflection(null);
     setScreen("timer");
@@ -149,27 +175,30 @@ const App = () => {
             type="button"
             onClick={() => setScreen("welcome")}
           >
-            振り返り付きポモドーロ
+            目標設定と振り返りが記録できるポモドーロタイマー
           </button>
         ) : (
-          <span className="brand-label">振り返り付きポモドーロ</span>
+          <span className="brand-label">
+            目標設定と振り返りが記録できるポモドーロタイマー
+          </span>
         )}
 
         {isTimerVisible && (
           <nav aria-label="主要メニュー">
             {user ? (
-              <div className="account-area">
+              <div className="account-area" ref={accountAreaRef}>
                 <button
                   className="header-button"
                   type="button"
                   aria-expanded={isAccountMenuOpen}
+                  aria-controls="account-menu"
                   disabled={isTimerNavigationLocked}
                   onClick={() => setIsAccountMenuOpen((isOpen) => !isOpen)}
                 >
-                  アカウント
+                  メニュー
                 </button>
                 {isAccountMenuOpen && (
-                  <div className="account-menu">
+                  <div className="account-menu" id="account-menu">
                     <p>{user.email}</p>
                     <button
                       type="button"
@@ -266,7 +295,9 @@ const App = () => {
               showStudyTime={user !== null}
               recoveryOwnerKey={user ? `user:${user.email}` : "guest"}
               onCreateStudyRecord={user ? createStudyRecord : undefined}
-              loadTodayStudySeconds={user ? getTodayStudySeconds : undefined}
+              loadStudySecondsForDate={
+                user ? getStudySecondsForDate : undefined
+              }
               loadStudyHistory={user ? getStudyHistory : undefined}
               deleteStudyRecord={user ? deleteStudyRecord : undefined}
               createReflection={user ? createReflection : undefined}
@@ -312,9 +343,9 @@ const App = () => {
                 <button
                   className="primary-button"
                   type="button"
-                  onClick={returnToNewTimer}
+                  onClick={returnToGoalSetup}
                 >
-                  新しい学習を始める
+                  目標設定画面へ戻る
                 </button>
               </div>
             </section>
@@ -327,7 +358,7 @@ const App = () => {
               studyRecord={reflectionStudyRecord}
               reflection={savedReflection}
               onEditReflection={() => setScreen("reflection")}
-              onStartNewStudy={returnToNewTimer}
+              onBackToGoalSetup={returnToGoalSetup}
             />
           )}
       </main>

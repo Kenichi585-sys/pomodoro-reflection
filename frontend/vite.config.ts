@@ -11,9 +11,9 @@ export default defineConfig({
       injectRegister: 'script-defer',
       includeAssets: ['favicon.svg', 'pwa-icon.svg'],
       manifest: {
-        name: '振り返り付きポモドーロ',
-        short_name: '振り返りポモドーロ',
-        description: '学習時間と振り返りを記録するポモドーロタイマー',
+        name: '目標設定と振り返りが記録できるポモドーロタイマー',
+        short_name: '目標・振り返りポモドーロ',
+        description: '目標、学習時間、振り返りを記録するポモドーロタイマー',
         lang: 'ja',
         theme_color: '#d8f4fc',
         background_color: '#d8f4fc',

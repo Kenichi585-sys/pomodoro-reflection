@@ -531,7 +531,9 @@ pomodoro-reflection/
 - ローカルで初期版の機能が完成した後、本番デプロイ用にReactのビルド成果物とDjangoをまとめたDockerイメージを作成する。
 - 開発中はViteの`/api`プロキシからDjangoへ接続し、ブラウザから同一オリジンに見える構成にする。
 - パスワード、Djangoの秘密鍵、データベースURLは`.env`へ置き、Gitへ登録しない。
-- `.env.example`には値を含めず、必要な変数名だけを記載する。
+- `.env.example`には本物の秘密情報を含めず、必要な変数名と安全なローカル用の例だけを記載する。
+- Django設定は`base.py`、`local.py`、`production.py`に分け、共通設定と環境固有設定を区別する。
+- ローカル設定は`.env`を読み込み、本番設定はCloud Runの環境変数とSecretから値を取得する。
 
 ### 日付とタイムゾーン
 
@@ -555,6 +557,7 @@ Neon: PostgreSQL
 - Reactを別の配信サービスへ分離せず、ビルド済みファイルをDjangoと同じCloud Runサービスから配信する。
 - 静的ファイルはWhiteNoiseを使用してDjangoから配信する。
 - 本番サーバーはDjangoの開発用`runserver`ではなくGunicornを使用する。
+- Viteのビルド成果物はWhiteNoiseでルートURLから配信し、Django管理画面の静的ファイルは`collectstatic`で`STATIC_ROOT`へ集める。
 - 同じURLから画面とAPIを配信し、セッションCookie、CSRF、CORSの構成を単純に保つ。
 - NeonのPostgreSQLは無料枠から開始する。
 - Cloud Runはリクエスト課金、最小インスタンス数0、最大インスタンス数1から開始する。
@@ -567,6 +570,7 @@ Neon: PostgreSQL
 
 - `DEBUG = False`にする。
 - `SECRET_KEY`、`DATABASE_URL`、許可ホスト、CSRF許可元を環境変数から取得する。
+- 許可ホストは実際に使用するホスト名を列挙し、`*`による全許可は行わない。
 - HTTPS用の`Secure` Cookie設定を有効にする。
 - Dockerイメージの作成時にReactをビルドし、Djangoの`collectstatic`を実行する。
 - データベースマイグレーションはWebコンテナの起動ごとに実行せず、デプロイ時の明示的な1回の処理として実行する。

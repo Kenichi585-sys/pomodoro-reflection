@@ -7,6 +7,7 @@ from django.utils import timezone
 DEFAULT_STUDY_THEME_NAME = "プログラミング"
 
 
+# 利用者ごとの学習テーマをデータベースへ保存するためのモデル。
 class StudyTheme(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -47,6 +48,7 @@ class StudyTheme(models.Model):
         return super().save(*args, **kwargs)
 
 
+# 1回の学習について、開始・終了日時や学習時間などを保存するモデル。
 class StudyRecord(models.Model):
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -131,6 +133,7 @@ class StudyRecord(models.Model):
         return super().save(*args, **kwargs)
 
 
+# 1件の学習記録に対応する振り返りを保存するモデル。
 class Reflection(models.Model):
     study_record = models.OneToOneField(
         StudyRecord,

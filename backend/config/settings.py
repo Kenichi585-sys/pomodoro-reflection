@@ -170,8 +170,9 @@ REST_FRAMEWORK = {
         'auth_login': '10/minute',
         'auth_register': '5/hour',
     },
-    # 初期状態では利用者が変更できるX-Forwarded-Forを信用しない。
-    # 本番で信頼するプロキシを追加する場合だけ、実際の構成に合わせて変更する。
+    # ローカルでは、ログイン回数制限の送信元判定に、利用者が自由に設定できる
+    # X-Forwarded-Forを使わず、直接接続してきた端末のIPアドレスを使う。
+    # Cloud RunではGoogleの中継サーバーを通るため、デプロイ時に中継数を確認して変更する。
     'NUM_PROXIES': int(os.getenv('DJANGO_NUM_PROXIES', '0')),
 }
 

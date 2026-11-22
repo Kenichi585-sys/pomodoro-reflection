@@ -5,6 +5,7 @@ from django.db.models.functions import Lower
 from .managers import UserManager
 
 
+# ユーザー名を使わず、メールアドレスをログインIDとして扱う利用者モデル。
 class User(AbstractUser):
     username = None
     email = models.EmailField("メールアドレス", unique=True)

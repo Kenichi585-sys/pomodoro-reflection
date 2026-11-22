@@ -3,6 +3,7 @@ type ErrorResponse = {
   detail?: string;
 };
 
+// JSON APIの通信失敗と入力エラーを、画面側で扱える形にまとめる。
 export class ApiError extends Error {
   fieldErrors: Record<string, string[]>;
   isOutcomeUncertain: boolean;
@@ -27,6 +28,7 @@ const readJson = async <T>(response: Response): Promise<T | null> => {
   }
 };
 
+// JSON APIへの通信と、HTTPエラーの画面向けメッセージへの変換を共通化する。
 export const requestJson = async <T>(
   url: string,
   init?: RequestInit,

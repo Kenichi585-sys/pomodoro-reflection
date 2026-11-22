@@ -17,12 +17,14 @@ PASSWORD_ERROR_MESSAGES = {
 }
 
 
+# ログイン中の利用者情報として、メールアドレスだけをReactへ返す。
 class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("email",)
 
 
+# 新規登録の入力を検証し、利用者と最初の学習テーマを作成する。
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField(error_messages=EMAIL_ERROR_MESSAGES)
     password = serializers.CharField(

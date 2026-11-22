@@ -13,6 +13,7 @@ from rest_framework.views import APIView
 from .serializers import LoginSerializer, RegisterSerializer, UserSerializer
 
 
+# Reactがデータ変更時のCSRF対策に使用するトークンを返すAPI。
 class CsrfTokenView(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -96,6 +97,7 @@ class LogoutView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+# 現在のセッションから、ログイン状態と利用者情報を返すAPI。
 class UserSessionView(APIView):
     authentication_classes = [SessionAuthentication]
     permission_classes = [AllowAny]

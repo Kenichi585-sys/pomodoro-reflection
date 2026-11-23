@@ -101,6 +101,13 @@ class ProductionSettingsTests(APISimpleTestCase):
             "verify-full",
         )
 
+    def test_enables_hsts_with_a_safe_initial_duration(self):
+        production = self.load_production_settings()
+
+        self.assertEqual(production.SECURE_HSTS_SECONDS, 3600)
+        self.assertFalse(production.SECURE_HSTS_INCLUDE_SUBDOMAINS)
+        self.assertFalse(production.SECURE_HSTS_PRELOAD)
+
     def test_configures_whitenoise_for_django_and_vite_files(self):
         production = self.load_production_settings()
 

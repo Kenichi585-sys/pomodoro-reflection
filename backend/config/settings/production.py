@@ -24,6 +24,9 @@ if "*" in ALLOWED_HOSTS:
 database_config = dj_database_url.parse(
     require_environment_variable("DATABASE_URL"),
 )
+# 東京のCloud RunからNeonへ接続するたびにTLS接続を作り直さないよう、
+# Gunicornの各スレッドで短時間だけDB接続を再利用する。
+database_config["CONN_MAX_AGE"] = 30
 database_options = database_config.get("OPTIONS", {})
 ssl_mode = database_options.get("sslmode")
 channel_binding = database_options.get("channel_binding")

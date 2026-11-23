@@ -58,6 +58,14 @@ class ProductionSettingsTests(APISimpleTestCase):
             },
         )
 
+    def test_reuses_production_database_connections_briefly(self):
+        production = self.load_production_settings()
+
+        self.assertEqual(
+            production.DATABASES["default"]["CONN_MAX_AGE"],
+            30,
+        )
+
     def test_rejects_database_url_without_server_authentication(self):
         environment = {
             **self.environment,

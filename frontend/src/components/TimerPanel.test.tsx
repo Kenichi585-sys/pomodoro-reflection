@@ -94,7 +94,7 @@ describe('TimerPanel', () => {
         showStudyTime
         recoveryOwnerKey="user:test@example.com"
         onCreateStudyRecord={vi.fn()}
-        loadTodayStudySeconds={async () => 60 * 60}
+        loadStudySecondsForDate={async () => 60 * 60}
         onTimerNavigationLockChange={timerLockMock}
       />,
     )
@@ -102,7 +102,9 @@ describe('TimerPanel', () => {
     await act(async () => undefined)
 
     fireEvent.change(screen.getByLabelText('今回の目標（任意）'), {
-      target: { value: 'Serializerを説明できるようにする' },
+      target: {
+        value: '\n  Serializerを説明できるようにする  \n\n',
+      },
     })
     fireEvent.click(screen.getByRole('button', { name: 'タイマーへ進む' }))
 
@@ -146,7 +148,7 @@ describe('TimerPanel', () => {
     ).toBeInTheDocument()
 
     fireEvent.click(
-      screen.getByRole('button', { name: '今回の目標へ戻る' }),
+      screen.getByRole('button', { name: '目標設定画面へ戻る' }),
     )
     expect(
       screen.getByRole('heading', { name: '今回の目標を決める' }),
@@ -175,7 +177,7 @@ describe('TimerPanel', () => {
         showStudyTime
         recoveryOwnerKey="user:test@example.com"
         onCreateStudyRecord={vi.fn()}
-        loadTodayStudySeconds={async () => 10 * 60}
+        loadStudySecondsForDate={async () => 10 * 60}
         loadStudyHistory={async () => ({
           total_study_seconds: 10 * 60,
           groups: [
@@ -207,7 +209,7 @@ describe('TimerPanel', () => {
       fireEvent.click(screen.getByRole('button', { name: '削除する' }))
     })
     fireEvent.click(
-      screen.getByRole('button', { name: '今回の目標へ戻る' }),
+      screen.getByRole('button', { name: '目標設定画面へ戻る' }),
     )
     fireEvent.click(screen.getByRole('button', { name: 'タイマーへ進む' }))
 
@@ -216,8 +218,8 @@ describe('TimerPanel', () => {
 
   it('日付が変わると今日の学習時間を新しい日付で取得し直す', async () => {
     vi.setSystemTime(new Date(2026, 9, 27, 23, 59, 59))
-    const loadTodayStudySeconds = vi
-      .fn<() => Promise<number>>()
+    const loadStudySecondsForDate = vi
+      .fn<(studyDate: string) => Promise<number>>()
       .mockResolvedValueOnce(60 * 60)
       .mockResolvedValueOnce(0)
 
@@ -226,7 +228,7 @@ describe('TimerPanel', () => {
         showStudyTime
         recoveryOwnerKey="user:test@example.com"
         onCreateStudyRecord={vi.fn()}
-        loadTodayStudySeconds={loadTodayStudySeconds}
+        loadStudySecondsForDate={loadStudySecondsForDate}
         onTimerNavigationLockChange={timerLockMock}
       />,
     )
@@ -237,8 +239,49 @@ describe('TimerPanel', () => {
 
     await act(async () => vi.advanceTimersByTime(1_100))
 
-    expect(loadTodayStudySeconds).toHaveBeenCalledTimes(2)
+    expect(loadStudySecondsForDate).toHaveBeenNthCalledWith(1, '2026-10-27')
+    expect(loadStudySecondsForDate).toHaveBeenNthCalledWith(2, '2026-10-28')
     expect(screen.getByText('0分')).toBeInTheDocument()
+  })
+
+  it('日付を跨いでも学習終了までは開始日の学習時間を表示する', async () => {
+    vi.setSystemTime(new Date(2026, 9, 27, 23, 59, 59))
+    const loadStudySecondsForDate = vi
+      .fn<(studyDate: string) => Promise<number>>()
+      .mockResolvedValueOnce(60 * 60)
+      .mockResolvedValueOnce(0)
+
+    render(
+      <TimerPanel
+        showStudyTime
+        recoveryOwnerKey="user:test@example.com"
+        onCreateStudyRecord={vi.fn(async (input: CreateStudyRecordInput) => ({
+          ...createStudyRecordResponse(input),
+          study_date: '2026-10-27',
+        }))}
+        loadStudySecondsForDate={loadStudySecondsForDate}
+        onTimerNavigationLockChange={timerLockMock}
+      />,
+    )
+
+    await act(async () => undefined)
+    fireEvent.click(screen.getByRole('button', { name: 'タイマーへ進む' }))
+    fireEvent.click(screen.getByRole('button', { name: '学習を開始' }))
+
+    await act(async () => vi.advanceTimersByTime(1_100))
+
+    expect(loadStudySecondsForDate).toHaveBeenCalledTimes(1)
+    expect(loadStudySecondsForDate).toHaveBeenCalledWith('2026-10-27')
+    expect(screen.getByText('1時間')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '学習を終了' }))
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole('button', { name: '学習時間を保存して終了' }),
+      )
+    })
+
+    expect(loadStudySecondsForDate).toHaveBeenNthCalledWith(2, '2026-10-28')
   })
 
   it('開始後は実時刻との差から残り時間を更新する', () => {
@@ -660,7 +703,8 @@ describe('TimerPanel', () => {
         presetId: '52-17',
         phase: 'waiting',
         accumulatedFocusMilliseconds: 25 * 60 * 1000,
-        completedFocusCount: 0,
+        completedFocusCount: 1,
+        completedFocusCountPresetId: '25-5',
       },
     })
 
@@ -671,6 +715,27 @@ describe('TimerPanel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '25分 / 5分' }))
     expect(screen.getByLabelText('次の学習を待機中 25:00')).toBeInTheDocument()
+    expect(screen.getByText('1 / 4回')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '52分 / 17分' }))
+    fireEvent.click(screen.getByRole('button', { name: '学習を始める' }))
+    expect(screen.getByRole('button', { name: '25分 / 5分' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: '52分 / 17分' })).toBeDisabled()
+    expect(loadTimerRecoverySnapshot(localStorage, storageKey)).toMatchObject({
+      status: 'loaded',
+      snapshot: {
+        presetId: '52-17',
+        completedFocusCount: 0,
+        completedFocusCountPresetId: '52-17',
+      },
+    })
+
+    vi.setSystemTime(new Date(Date.now() + 52 * 60 * 1000))
+    await act(async () => vi.advanceTimersByTime(250))
+    vi.setSystemTime(new Date(Date.now() + 17 * 60 * 1000))
+    await act(async () => vi.advanceTimersByTime(250))
+
+    fireEvent.click(screen.getByRole('button', { name: '25分 / 5分' }))
     expect(screen.getByText('0 / 4回')).toBeInTheDocument()
   })
 

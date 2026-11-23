@@ -4,7 +4,7 @@ import {
   createStudyRecord,
   deleteStudyRecord,
   getStudyHistory,
-  getTodayStudySeconds,
+  getStudySecondsForDate,
   type CreateStudyRecordInput,
 } from "./studyRecords";
 
@@ -50,13 +50,20 @@ describe("createStudyRecord", () => {
     });
   });
 
-  it("今日の保存済み学習秒数を取得する", async () => {
+  it("指定日の保存済み学習秒数を取得する", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ study_seconds: 3600 }));
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(jsonResponse({ study_seconds: 3600 })),
+      fetchMock,
     );
 
-    await expect(getTodayStudySeconds()).resolves.toBe(3600);
+    await expect(getStudySecondsForDate("2026-10-27")).resolves.toBe(3600);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/study-records/today-summary/?study_date=2026-10-27",
+      expect.objectContaining({ credentials: "same-origin" }),
+    );
   });
 
   it("指定した日付位置から過去の振り返りを取得する", async () => {

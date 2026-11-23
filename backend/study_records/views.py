@@ -23,6 +23,7 @@ REFLECTION_VALUE_FIELDS = (
 )
 
 
+# すでに保存されている振り返りと、今回送られた内容が同じか確認する。
 def reflection_matches_input(reflection, validated_data):
     for field_name in REFLECTION_VALUE_FIELDS:
         model_field = Reflection._meta.get_field(field_name)
@@ -33,6 +34,7 @@ def reflection_matches_input(reflection, validated_data):
     return True
 
 
+# 内容が異なる振り返りがすでに存在する場合のエラーを返す。
 def reflection_conflict_response():
     return Response(
         {"errors": {"non_field_errors": ["振り返りはすでに存在します。"]}},
@@ -40,11 +42,13 @@ def reflection_conflict_response():
     )
 
 
+# Reactから受け取った学習記録を、ログイン中の利用者の記録として保存するAPI。
 class StudyRecordCreateView(APIView):
     def post(self, request):
         serializer = StudyRecordSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         client_uuid = serializer.validated_data["client_uuid"]
+        # 同じ記録がすでに保存されていないか確認する
         existing_record = StudyRecord.objects.filter(
             user=request.user,
             client_uuid=client_uuid,
@@ -74,18 +78,26 @@ class StudyRecordCreateView(APIView):
         )
 
 
+# ログイン中の利用者が指定日に保存した学習時間の合計を返すAPI。
 class TodayStudySummaryView(APIView):
     def get(self, request):
+        requested_study_date = request.query_params.get("study_date")
+        study_date = (
+            serializers.DateField().run_validation(requested_study_date)
+            if requested_study_date is not None
+            else timezone.localdate()
+        )
         study_seconds = (
             StudyRecord.objects.filter(
                 user=request.user,
-                study_date=timezone.localdate(),
+                study_date=study_date,
             ).aggregate(total=Sum("study_seconds"))["total"]
             or 0
         )
         return Response({"study_seconds": study_seconds})
 
 
+# ログイン中の利用者が指定した学習記録を削除するAPI。
 class StudyRecordDeleteView(APIView):
     def delete(self, request, study_record_id):
         StudyRecord.objects.filter(
@@ -95,6 +107,7 @@ class StudyRecordDeleteView(APIView):
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+# ログイン中の利用者の学習記録と振り返りを、日付ごとにまとめてReactに返すAPI。
 class StudyRecordHistoryView(APIView):
     page_size = 20
 
@@ -162,6 +175,7 @@ class StudyRecordHistoryView(APIView):
         )
 
 
+# 指定した学習記録の振り返りを作成・編集・削除するAPI。
 class ReflectionView(APIView):
     @staticmethod
     def get_study_record(request, study_record_id):

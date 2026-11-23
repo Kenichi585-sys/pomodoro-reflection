@@ -4,6 +4,7 @@ from rest_framework import serializers
 from .models import Reflection, StudyRecord
 
 
+# Reactから受け取った学習記録を検証し、DBへの保存やReactへの返却に使える形へ変換する。
 class StudyRecordSerializer(serializers.ModelSerializer):
     class Meta:
         model = StudyRecord
@@ -47,6 +48,7 @@ class StudyRecordSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
+# Reactから受け取った振り返りを検証し、DBへの保存やReactへの返却に使える形へ変換する。
 class ReflectionSerializer(serializers.ModelSerializer):
     class Meta:
         model = Reflection
@@ -84,6 +86,7 @@ class ReflectionSerializer(serializers.ModelSerializer):
         return attrs
 
 
+# 履歴画面へ返すため、1件の学習記録と対応する振り返りをJSONにまとめる。
 class StudyRecordHistorySerializer(serializers.ModelSerializer):
     reflection = serializers.SerializerMethodField()
 

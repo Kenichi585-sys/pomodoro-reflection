@@ -50,9 +50,11 @@ export const createStudyRecord = (
     options?.onRequestStarted,
   );
 
-export const getTodayStudySeconds = async (): Promise<number> => {
+export const getStudySecondsForDate = async (
+  studyDate: string,
+): Promise<number> => {
   const summary = await requestJson<{ study_seconds: number }>(
-    "/api/study-records/today-summary/",
+    `/api/study-records/today-summary/?study_date=${encodeURIComponent(studyDate)}`,
   );
   return summary.study_seconds;
 };

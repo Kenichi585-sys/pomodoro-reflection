@@ -5,6 +5,7 @@ import {
 } from './timerConfig'
 
 export const TIMER_RECOVERY_VERSION = 4
+export const TIMER_RECOVERY_MAX_INACTIVE_MILLISECONDS = 12 * 60 * 60 * 1000
 const TIMER_RECOVERY_STORAGE_KEY_PREFIX = 'pomodoro-reflection:timer-recovery'
 
 export type TimerRecoveryPhase = 'focus' | 'break' | 'waiting'
@@ -29,6 +30,7 @@ export type TimerRecoverySnapshot = {
   phaseDurationMilliseconds: number
   accumulatedFocusMilliseconds: number
   completedFocusCount: number
+  completedFocusCountPresetId?: TimerPresetId
   pendingStudyEnd: TimerRecoveryPendingStudyEnd | null
 }
 
@@ -37,6 +39,14 @@ export type TimerRecoveryLoadResult =
   | { status: 'loaded'; snapshot: TimerRecoverySnapshot }
   | { status: 'invalid' }
   | { status: 'unavailable' }
+
+export const isTimerRecoverySnapshotExpired = (
+  snapshot: Pick<TimerRecoverySnapshot, 'savedAtMs'>,
+  currentTimeMs = Date.now(),
+) =>
+  snapshot.savedAtMs > currentTimeMs ||
+  currentTimeMs - snapshot.savedAtMs >
+    TIMER_RECOVERY_MAX_INACTIVE_MILLISECONDS
 
 type TimerRecoveryStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>
 type TimerRecoveryPresets = Readonly<Record<TimerPresetId, TimerPreset>>
@@ -101,6 +111,7 @@ const isPendingStudyEnd = (
 const hasValidAccumulatedFocusTime = (
   phase: TimerRecoveryPhase,
   focusDurationMilliseconds: number,
+  completedFocusDurationMilliseconds: number,
   phaseRemainingMilliseconds: number,
   accumulatedFocusMilliseconds: number,
   completedFocusCount: number,
@@ -110,7 +121,7 @@ const hasValidAccumulatedFocusTime = (
       ? focusDurationMilliseconds - phaseRemainingMilliseconds
       : 0
   const minimumAccumulatedFocusMilliseconds =
-    completedFocusCount * focusDurationMilliseconds +
+    completedFocusCount * completedFocusDurationMilliseconds +
     minimumCurrentFocusElapsedMilliseconds
 
   return (
@@ -128,14 +139,23 @@ const hasValidPresetState = (
   phaseDurationMilliseconds: number,
   accumulatedFocusMilliseconds: number,
   completedFocusCount: number,
+  completedFocusCountPresetId: TimerPresetId,
 ) => {
   const preset = timerPresets[presetId]
+  const completedFocusCountPreset = timerPresets[completedFocusCountPresetId]
   const focusDurationMilliseconds = preset.focusSeconds * 1000
+  const completedFocusDurationMilliseconds =
+    completedFocusCountPreset.focusSeconds * 1000
   const focusCountBeforeLongBreak = preset.focusCountBeforeLongBreak
+
+  if (phase !== 'waiting' && completedFocusCountPresetId !== presetId) {
+    return false
+  }
 
   if (!hasValidAccumulatedFocusTime(
     phase,
     focusDurationMilliseconds,
+    completedFocusDurationMilliseconds,
     phaseRemainingMilliseconds,
     accumulatedFocusMilliseconds,
     completedFocusCount,
@@ -166,7 +186,7 @@ const hasValidPresetState = (
   if (breakKind === 'short') {
     return (
       phaseDurationMilliseconds === preset.shortBreakSeconds * 1000 &&
-      completedFocusCount >= 1 &&
+      (focusCountBeforeLongBreak === null || completedFocusCount >= 1) &&
       (focusCountBeforeLongBreak === null ||
         completedFocusCount < focusCountBeforeLongBreak)
     )
@@ -200,6 +220,7 @@ const isTimerRecoverySnapshot = (
     phaseDurationMilliseconds,
     accumulatedFocusMilliseconds,
     completedFocusCount,
+    completedFocusCountPresetId,
     pendingStudyEnd,
   } = value
 
@@ -219,6 +240,8 @@ const isTimerRecoverySnapshot = (
     phaseRemainingMilliseconds <= phaseDurationMilliseconds &&
     isNonNegativeSafeNumber(accumulatedFocusMilliseconds) &&
     isNonNegativeSafeNumber(completedFocusCount) &&
+    (completedFocusCountPresetId === undefined ||
+      isTimerPresetId(completedFocusCountPresetId)) &&
     (pendingStudyEnd === null ||
       isPendingStudyEnd(pendingStudyEnd, sessionStartedAtMs, savedAtMs)) &&
     hasValidPresetState(
@@ -230,6 +253,7 @@ const isTimerRecoverySnapshot = (
       phaseDurationMilliseconds,
       accumulatedFocusMilliseconds,
       completedFocusCount,
+      completedFocusCountPresetId ?? presetId,
     )
   )
 }

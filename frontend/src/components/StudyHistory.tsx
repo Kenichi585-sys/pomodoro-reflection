@@ -8,6 +8,7 @@ import type {
   StudyHistoryResponse,
 } from "../api/studyRecords";
 import { formatStudyTime } from "../timer/timerConfig";
+import { formatStudyTimeRange } from "../timer/studyPeriod";
 import { ReflectionForm } from "./ReflectionForm";
 
 type StudyHistoryProps = {
@@ -34,12 +35,6 @@ const formatDate = (studyDate: string): string =>
     weekday: "short",
   }).format(new Date(`${studyDate}T00:00:00`));
 
-const formatTime = (dateTime: string): string =>
-  new Intl.DateTimeFormat("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(new Date(dateTime));
-
 export const StudyHistory = ({
   loadHistory,
   deleteStudyRecord,
@@ -49,14 +44,22 @@ export const StudyHistory = ({
   onStudyRecordDeleted,
   onBack,
 }: StudyHistoryProps) => {
+  // 学習日ごとにまとめられた、過去の学習記録と振り返り。
   const [groups, setGroups] = useState<StudyHistoryGroup[]>([]);
+  // このアプリでDBへ保存した、すべての学習時間の合計秒数。
   const [totalStudySeconds, setTotalStudySeconds] = useState(0);
+  // 次に読み込む履歴の開始位置。nullでなければ「さらに読み込む」で続きが取得でき、nullなら続きはない。
   const [nextOffset, setNextOffset] = useState<number | null>(null);
+  // 過去の学習記録をDjangoから読み込んでいる途中か。
   const [isLoading, setIsLoading] = useState(true);
+  // 履歴の取得・削除に失敗した場合に表示するメッセージ。
   const [errorMessage, setErrorMessage] = useState("");
+  // 削除確認画面の対象になっている学習記録。
   const [recordPendingDeletion, setRecordPendingDeletion] =
     useState<StudyHistoryRecord | null>(null);
+  // 学習記録をDjangoから削除している途中か。
   const [isDeleting, setIsDeleting] = useState(false);
+  // 振り返りを新しく書く、または編集している学習記録。
   const [recordBeingReflected, setRecordBeingReflected] =
     useState<StudyHistoryRecord | null>(null);
 
@@ -107,16 +110,16 @@ export const StudyHistory = ({
     }
   };
 
-  const loadPage = useCallback(async (offset: number) => {
+  // 「さらに読み込む」で、表示中の履歴の後ろへ過去の履歴を追加する。
+  const loadMoreHistory = useCallback(async (offset: number) => {
     setIsLoading(true);
     setErrorMessage("");
     try {
       const response = await loadHistory(offset);
-      setGroups((currentGroups) =>
-        offset === 0
-          ? response.groups
-          : [...currentGroups, ...response.groups],
-      );
+      setGroups((currentGroups) => [
+        ...currentGroups,
+        ...response.groups,
+      ]);
       setNextOffset(response.next_offset);
       setTotalStudySeconds(response.total_study_seconds);
     } catch (error) {
@@ -222,7 +225,7 @@ export const StudyHistory = ({
         type="button"
         onClick={onBack}
       >
-        今回の目標へ戻る
+        目標設定画面へ戻る
       </button>
 
       {errorMessage && (
@@ -245,7 +248,10 @@ export const StudyHistory = ({
               {group.records.map((record) => (
                 <article className="study-history-record" key={record.id}>
                   <p className="study-history-period">
-                    {formatTime(record.started_at)}〜{formatTime(record.ended_at)}
+                    {formatStudyTimeRange(
+                      record.started_at,
+                      record.ended_at,
+                    )}
                     <span>{formatStudyTime(record.study_seconds)}</span>
                   </p>
                   {record.goal && (
@@ -348,7 +354,7 @@ export const StudyHistory = ({
           <button
             className="secondary-button"
             type="button"
-            onClick={() => void loadPage(nextOffset)}
+            onClick={() => void loadMoreHistory(nextOffset)}
           >
             さらに読み込む
           </button>

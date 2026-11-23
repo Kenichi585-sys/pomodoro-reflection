@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 
 import { TIMER_TEST_PRESETS } from './timerConfig'
 import {
+  isTimerRecoverySnapshotExpired,
   loadTimerRecoverySnapshot,
   removeTimerRecoverySnapshot,
   saveTimerRecoverySnapshot,
@@ -51,6 +52,21 @@ describe('timerRecovery', () => {
       status: 'loaded',
       snapshot,
     })
+  })
+
+  it('最後の保存から12時間を超えた復旧用データを期限切れと判断する', () => {
+    expect(
+      isTimerRecoverySnapshotExpired(
+        snapshot,
+        snapshot.savedAtMs + 12 * 60 * 60 * 1000,
+      ),
+    ).toBe(false)
+    expect(
+      isTimerRecoverySnapshotExpired(
+        snapshot,
+        snapshot.savedAtMs + 12 * 60 * 60 * 1000 + 1,
+      ),
+    ).toBe(true)
   })
 
   it('保存済みデータがなければemptyを返す', () => {

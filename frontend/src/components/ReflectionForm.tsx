@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type SubmitEvent } from "react";
 
 import { ApiError } from "../api/client";
 import type { Reflection, ReflectionInput } from "../api/reflections";
 import type { StudyRecord } from "../api/studyRecords";
 import { formatStudyTime } from "../timer/timerConfig";
+import { formatStudyPeriod } from "../timer/studyPeriod";
 
 type ReflectionFormProps = {
   studyRecord: Pick<
@@ -18,23 +19,6 @@ type ReflectionFormProps = {
   onSkip: () => void;
 };
 
-const formatStudyPeriod = (
-  studyRecord: Pick<StudyRecord, "started_at" | "ended_at">,
-): string => {
-  const startedAt = new Date(studyRecord.started_at);
-  const endedAt = new Date(studyRecord.ended_at);
-  const date = new Intl.DateTimeFormat("ja-JP", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  }).format(startedAt);
-  const timeFormatter = new Intl.DateTimeFormat("ja-JP", {
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-  return `${date} ${timeFormatter.format(startedAt)}〜${timeFormatter.format(endedAt)}`;
-};
-
 export const ReflectionForm = ({
   studyRecord,
   initialReflection,
@@ -44,21 +28,31 @@ export const ReflectionForm = ({
   onDeleted,
   onSkip,
 }: ReflectionFormProps) => {
+  // 「今回取り組んだこと」の入力内容。
   const [workedOn, setWorkedOn] = useState(initialReflection?.worked_on ?? "");
+  // 「分かったこと」の入力内容。
   const [learned, setLearned] = useState(initialReflection?.learned ?? "");
+  // 「学習を通して感じたこと」の入力内容。
   const [impressions, setImpressions] = useState(
     initialReflection?.impressions ?? "",
   );
+  // 「次にやること」の入力内容。
   const [nextAction, setNextAction] = useState(
     initialReflection?.next_action ?? "",
   );
+  // 入力項目ごとに、APIから返されたエラーメッセージを保持する。
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
+  // 振り返りフォーム全体に対するエラーメッセージ。
   const [formError, setFormError] = useState("");
+  // 振り返りを保存または削除している途中か。
   const [isSaving, setIsSaving] = useState(false);
+  // 通信が中断し、保存または削除の成否を画面側で判断できない状態か。
   const [isOutcomeUncertain, setIsOutcomeUncertain] = useState(false);
+  // 削除または入力破棄の確認画面を表示しているか。
   const [confirmationAction, setConfirmationAction] = useState<
     "delete" | "discard" | null
   >(null);
+  // 確認画面を開いた時に、決定ボタンへフォーカスするための参照。
   const confirmationButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
@@ -74,6 +68,7 @@ export const ReflectionForm = ({
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [confirmationAction, isSaving]);
 
+  // 振り返りの入力内容をまとめたオブジェクト
   const input: ReflectionInput = {
     worked_on: workedOn.trim(),
     learned: learned.trim(),
@@ -113,7 +108,9 @@ export const ReflectionForm = ({
         if (error.isOutcomeUncertain) setIsOutcomeUncertain(true);
         setFormError(error.message);
       } else {
-        setFormError("振り返りを削除できませんでした。もう一度お試しください。");
+        setFormError(
+          "振り返りを削除できませんでした。もう一度お試しください。",
+        );
       }
     } finally {
       setIsSaving(false);
@@ -130,7 +127,7 @@ export const ReflectionForm = ({
     if (confirmationAction === "delete") void deleteReflection();
   };
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!hasInput) {
       if (initialReflection === undefined) {
@@ -152,11 +149,11 @@ export const ReflectionForm = ({
       if (error instanceof ApiError) {
         if (error.isOutcomeUncertain) setIsOutcomeUncertain(true);
         setFieldErrors(error.fieldErrors);
-        setFormError(
-          error.fieldErrors.non_field_errors?.[0] ?? error.message,
-        );
+        setFormError(error.fieldErrors.non_field_errors?.[0] ?? error.message);
       } else {
-        setFormError("振り返りを保存できませんでした。もう一度お試しください。");
+        setFormError(
+          "振り返りを保存できませんでした。もう一度お試しください。",
+        );
       }
     } finally {
       setIsSaving(false);
@@ -176,7 +173,7 @@ export const ReflectionForm = ({
         {initialReflection ? "振り返りを編集" : "振り返り"}
       </h1>
       <p className="reflection-study-summary">
-        {formatStudyPeriod(studyRecord)}
+        {formatStudyPeriod(studyRecord.started_at, studyRecord.ended_at)}
         <span>学習時間 {formatStudyTime(studyRecord.study_seconds)}</span>
       </p>
 
@@ -215,9 +212,7 @@ export const ReflectionForm = ({
           />
           {fieldError("learned")}
 
-          <label htmlFor="reflection-impressions">
-            学習を通して感じたこと
-          </label>
+          <label htmlFor="reflection-impressions">学習を通して感じたこと</label>
           <p id="reflection-impressions-help" className="reflection-help-text">
             学習前後で変わった印象や、難しかった・意外だったと感じたことなど
           </p>

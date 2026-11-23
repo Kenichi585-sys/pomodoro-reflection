@@ -100,11 +100,13 @@ describe('App', () => {
     })
     fireEvent.click(screen.getByRole('button', { name: 'ログイン' }))
 
-    const accountButton = await screen.findByRole('button', { name: 'アカウント' })
+    const accountButton = await screen.findByRole('button', { name: 'メニュー' })
     expect(screen.getByRole('heading', { name: '今回の目標を決める' })).toBeInTheDocument()
     expect(screen.queryByText('User@example.com')).not.toBeInTheDocument()
     fireEvent.click(accountButton)
     expect(screen.getByText('User@example.com')).toBeInTheDocument()
+    fireEvent.pointerDown(document.body)
+    expect(screen.queryByText('User@example.com')).not.toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       '/api/auth/login/',
@@ -159,7 +161,7 @@ describe('App', () => {
     )
 
     render(<App />)
-    const accountButton = await screen.findByRole('button', { name: 'アカウント' })
+    const accountButton = await screen.findByRole('button', { name: 'メニュー' })
     fireEvent.click(accountButton)
     const logoutButton = screen.getByRole('button', { name: 'ログアウト' })
     fireEvent.click(screen.getByRole('button', { name: 'タイマーへ進む' }))
@@ -263,7 +265,9 @@ describe('App', () => {
     render(<App />)
     fireEvent.click(await screen.findByRole('button', { name: '新規登録' }))
     fireEvent.click(
-      screen.getByRole('button', { name: '振り返り付きポモドーロ' }),
+      screen.getByRole('button', {
+        name: '目標設定と振り返りが記録できるポモドーロタイマー',
+      }),
     )
 
     expect(
@@ -288,13 +292,13 @@ describe('App', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     render(<App />)
-    fireEvent.click(await screen.findByRole('button', { name: 'アカウント' }))
+    fireEvent.click(await screen.findByRole('button', { name: 'メニュー' }))
     fireEvent.click(screen.getByRole('button', { name: 'ログアウト' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'ログアウト処理に失敗しました。',
     )
-    expect(screen.getByRole('button', { name: 'アカウント' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'メニュー' })).toBeInTheDocument()
   })
 
   it('学習時間を保存して振り返りを入力できる', async () => {
@@ -362,6 +366,9 @@ describe('App', () => {
       await screen.findByRole('heading', { name: '振り返りを保存しました' }),
     ).toBeInTheDocument()
     expect(screen.getByText('Serializerを読んだ')).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: '目標設定画面へ戻る' }),
+    ).toBeInTheDocument()
     expect(fetchMock).toHaveBeenNthCalledWith(
       6,
       '/api/study-records/12/reflection/',

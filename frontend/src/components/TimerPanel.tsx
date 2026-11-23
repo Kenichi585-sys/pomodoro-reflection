@@ -21,6 +21,7 @@ import {
 } from "../timer/timerConfig";
 import {
   createTimerRecoveryStorageKey,
+  isTimerRecoverySnapshotExpired,
   loadTimerRecoverySnapshot,
   removeTimerRecoverySnapshot,
   saveTimerRecoverySnapshot,
@@ -39,7 +40,7 @@ type TimerPanelProps = {
     input: CreateStudyRecordInput,
     options?: CreateStudyRecordOptions,
   ) => Promise<StudyRecord>;
-  loadTodayStudySeconds?: () => Promise<number>;
+  loadStudySecondsForDate?: (studyDate: string) => Promise<number>;
   loadStudyHistory?: (offset?: number) => Promise<StudyHistoryResponse>;
   deleteStudyRecord?: (studyRecordId: number) => Promise<void>;
   createReflection?: (
@@ -75,6 +76,13 @@ const formatLocalDateKey = (date = new Date()): string => {
   return `${year}-${month}-${day}`;
 };
 
+const normalizeGoal = (value: string): string =>
+  value
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+
 const millisecondsUntilNextDay = (): number => {
   const now = new Date();
   const nextDay = new Date(now);
@@ -94,6 +102,14 @@ const loadInitialRecoveryState = (
     );
 
     if (result.status === "loaded") {
+      if (isTimerRecoverySnapshotExpired(result.snapshot)) {
+        removeTimerRecoverySnapshot(window.localStorage, storageKey);
+        return {
+          snapshot: null,
+          warning:
+            "前回のタイマーは最後の保存から12時間以上経過したためリセットしました。",
+        };
+      }
       return { snapshot: result.snapshot, warning: "" };
     }
     if (result.status === "invalid") {
@@ -145,7 +161,7 @@ export const TimerPanel = ({
   showStudyTime,
   recoveryOwnerKey,
   onCreateStudyRecord,
-  loadTodayStudySeconds,
+  loadStudySecondsForDate,
   loadStudyHistory,
   deleteStudyRecord,
   createReflection,
@@ -162,13 +178,17 @@ export const TimerPanel = ({
     recoveryOwnerKey,
     isTimerTestMode,
   );
+  // ページを開いた時に読み込んだ、前回のタイマー復旧情報。
   const [initialRecoveryState] = useState(() =>
     loadInitialRecoveryState(recoveryStorageKey, timerPresets),
   );
+  // タイマーの前に、今回の目標を入力する画面を表示しているか。
   const [isGoalSetupVisible, setIsGoalSetupVisible] = useState(
     onCreateStudyRecord !== undefined && initialRecoveryState.snapshot === null,
   );
+  // 過去の学習記録と振り返りを表示しているか。
   const [isHistoryVisible, setIsHistoryVisible] = useState(false);
+  // 前回中断したタイマーを復旧するか、利用者の判断を待っている情報。
   const [pendingRecoverySnapshot, setPendingRecoverySnapshot] =
     useState<TimerRecoverySnapshot | null>(initialRecoveryState.snapshot);
   // 今回の学習を最初に開始した時刻。学習記録の開始日時に使う。
@@ -179,15 +199,21 @@ export const TimerPanel = ({
   const [sessionClientUuid, setSessionClientUuid] = useState<string | null>(
     null,
   );
+  // 今回の学習を始める前に入力した目標。
   const [goal, setGoal] = useState("");
+  // 画面を開いた時点で、今日すでにDBへ保存されていた学習秒数。
   const [initialTodayStudySeconds, setInitialTodayStudySeconds] = useState(0);
+  // この画面を開いてから、新しくDBへ保存した今日の学習秒数。
   const [savedDuringMountStudySeconds, setSavedDuringMountStudySeconds] =
     useState(0);
+  // この画面を開いてから、学習記録の削除によって減った今日の学習秒数。
   const [
     deletedDuringMountTodayStudySeconds,
     setDeletedDuringMountTodayStudySeconds,
   ] = useState(0);
-  const [todayStudyDate, setTodayStudyDate] = useState(formatLocalDateKey);
+  // 現在の暦日。日付を跨いだセッションの終了後に、表示対象を当日へ切り替えるために使う。
+  const [calendarDate, setCalendarDate] = useState(formatLocalDateKey);
+  // 今日の学習時間を取得できなかった時に表示するメッセージ。
   const [todaySummaryWarning, setTodaySummaryWarning] = useState("");
   // 選択中の「25分／5分」または「52分／17分」。
   const [presetId, setPresetId] = useState<TimerPresetId>("25-5");
@@ -214,6 +240,9 @@ export const TimerPanel = ({
   const [currentTimeMs, setCurrentTimeMs] = useState(0);
   // 現在のタイマー設定で、学習を何回完了したか。
   const [completedFocusCount, setCompletedFocusCount] = useState(0);
+  // 完了回数が「25分／5分」と「52分／17分」のどちらに属するか。
+  const [completedFocusCountPresetId, setCompletedFocusCountPresetId] =
+    useState<TimerPresetId>("25-5");
   // 一時停止または完了までに、記録済みとなった学習時間。
   const [accumulatedFocusMilliseconds, setAccumulatedFocusMilliseconds] =
     useState(0);
@@ -227,18 +256,25 @@ export const TimerPanel = ({
   const [recoveryWarning, setRecoveryWarning] = useState(
     initialRecoveryState.warning,
   );
+  // 学習終了後、DBへ保存するか利用者が選ぶまで保持する終了時刻と学習秒数。
   const [pendingStudyEnd, setPendingStudyEnd] =
     useState<PendingStudyEnd | null>(null);
+  // 学習記録を保存したか破棄したかと、対象となった学習秒数。
   const [sessionCompletion, setSessionCompletion] =
     useState<SessionCompletion | null>(null);
+  // 学習時間を保存せずに終了する確認画面を表示しているか。
   const [isDiscardConfirmationVisible, setIsDiscardConfirmationVisible] =
     useState(false);
+  // 学習記録をDBへ保存している途中か。
   const [isSavingStudyRecord, setIsSavingStudyRecord] = useState(false);
+  // 保存成功後に、振り返り画面へ進むか学習終了画面へ進むか。
   const [studyRecordSaveDestination, setStudyRecordSaveDestination] = useState<
     "reflection" | "finish" | null
   >(null);
+  // 通信が中断し、DBへの保存成否を画面側で判断できない状態か。
   const [isStudyRecordOutcomeUncertain, setIsStudyRecordOutcomeUncertain] =
     useState(false);
+  // 学習記録の保存に失敗した時に表示するメッセージ。
   const [studyRecordError, setStudyRecordError] = useState("");
   // ブラウンノイズを操作する関数を、TimerPanelで使う名前に変えて取り出す。
   const {
@@ -256,6 +292,10 @@ export const TimerPanel = ({
   } = useBreakMusic();
 
   const preset = timerPresets[presetId];
+  const studySummaryDate =
+    sessionStartedAtMs === null
+      ? calendarDate
+      : formatLocalDateKey(new Date(sessionStartedAtMs));
   const isRunning = status === "running";
   const visibleRemainingMilliseconds = isRunning
     ? calculateRemainingMilliseconds(
@@ -280,9 +320,9 @@ export const TimerPanel = ({
   const sessionStudySeconds = Math.floor(
     (accumulatedFocusMilliseconds + activeFocusElapsedMilliseconds) / 1000,
   );
-  const sessionStudySecondsForToday =
+  const sessionStudySecondsForSummaryDate =
     sessionStartedAtMs !== null &&
-    formatLocalDateKey(new Date(sessionStartedAtMs)) === todayStudyDate
+    formatLocalDateKey(new Date(sessionStartedAtMs)) === studySummaryDate
       ? sessionStudySeconds
       : 0;
   const todayStudySeconds = Math.max(
@@ -290,7 +330,7 @@ export const TimerPanel = ({
     initialTodayStudySeconds +
       savedDuringMountStudySeconds -
       deletedDuringMountTodayStudySeconds +
-      sessionStudySecondsForToday,
+      sessionStudySecondsForSummaryDate,
   );
   const remainingRatio =
     phaseDurationMilliseconds === 0
@@ -354,6 +394,7 @@ export const TimerPanel = ({
       accumulatedFocusMilliseconds:
         accumulatedFocusMilliseconds + activeFocusMilliseconds,
       completedFocusCount,
+      completedFocusCountPresetId,
       pendingStudyEnd:
         pendingStudyEnd === null
           ? null
@@ -390,6 +431,7 @@ export const TimerPanel = ({
       accumulatedFocusMilliseconds,
       breakKind,
       completedFocusCount,
+      completedFocusCountPresetId,
       goal,
       hasTimerSessionStarted,
       isRunning,
@@ -415,41 +457,17 @@ export const TimerPanel = ({
   }, [hasTimerSessionStarted, onTimerNavigationLockChange]);
 
   useEffect(() => {
-    if (loadTodayStudySeconds === undefined) return;
-
     let isActive = true;
     let dayChangeTimeoutId: number | null = null;
-
-    const loadSummary = (expectedStudyDate: string) => {
-      void loadTodayStudySeconds()
-        .then((studySeconds) => {
-          if (isActive && formatLocalDateKey() === expectedStudyDate) {
-            setInitialTodayStudySeconds(studySeconds);
-            setTodaySummaryWarning("");
-          }
-        })
-        .catch(() => {
-          if (isActive && formatLocalDateKey() === expectedStudyDate) {
-            setTodaySummaryWarning("今日の学習時間を取得できませんでした。");
-          }
-        });
-    };
 
     const scheduleDayChange = () => {
       dayChangeTimeoutId = window.setTimeout(() => {
         if (!isActive) return;
-        const nextStudyDate = formatLocalDateKey();
-        setTodayStudyDate(nextStudyDate);
-        setInitialTodayStudySeconds(0);
-        setSavedDuringMountStudySeconds(0);
-        setDeletedDuringMountTodayStudySeconds(0);
-        loadSummary(nextStudyDate);
+        setCalendarDate(formatLocalDateKey());
         scheduleDayChange();
       }, millisecondsUntilNextDay());
     };
 
-    const initialStudyDate = formatLocalDateKey();
-    loadSummary(initialStudyDate);
     scheduleDayChange();
 
     return () => {
@@ -458,7 +476,31 @@ export const TimerPanel = ({
         window.clearTimeout(dayChangeTimeoutId);
       }
     };
-  }, [loadTodayStudySeconds]);
+  }, []);
+
+  useEffect(() => {
+    if (loadStudySecondsForDate === undefined) return;
+
+    let isActive = true;
+    setInitialTodayStudySeconds(0);
+    setSavedDuringMountStudySeconds(0);
+    setDeletedDuringMountTodayStudySeconds(0);
+
+    void loadStudySecondsForDate(studySummaryDate)
+      .then((studySeconds) => {
+        if (!isActive) return;
+        setInitialTodayStudySeconds(studySeconds);
+        setTodaySummaryWarning("");
+      })
+      .catch(() => {
+        if (!isActive) return;
+        setTodaySummaryWarning("今日の学習時間を取得できませんでした。");
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [loadStudySecondsForDate, studySummaryDate]);
 
   useEffect(() => {
     return () => onTimerNavigationLockChange(false);
@@ -535,7 +577,10 @@ export const TimerPanel = ({
 
   const moveToBreak = useCallback(
     (currentTimeMs: number, focusEndAtMs: number) => {
-      const nextCompletedFocusCount = completedFocusCount + 1;
+      const nextCompletedFocusCount =
+        preset.focusCountBeforeLongBreak === null
+          ? 0
+          : completedFocusCount + 1;
       const isLongBreak =
         preset.focusCountBeforeLongBreak !== null &&
         nextCompletedFocusCount === preset.focusCountBeforeLongBreak;
@@ -673,6 +718,11 @@ export const TimerPanel = ({
         ? focusDurationMilliseconds
         : phaseRemainingMilliseconds;
 
+    if (completedFocusCountPresetId !== presetId) {
+      setCompletedFocusCount(0);
+      setCompletedFocusCountPresetId(presetId);
+    }
+
     if (sessionStartedAtMs === null) {
       setSessionStartedAtMs(startTimeMs);
       setSessionClientUuid(window.crypto.randomUUID());
@@ -700,7 +750,10 @@ export const TimerPanel = ({
   const moveCompletedFocusToPausedBreak = (
     finalAccumulatedFocusMilliseconds: number,
   ) => {
-    const nextCompletedFocusCount = completedFocusCount + 1;
+    const nextCompletedFocusCount =
+      preset.focusCountBeforeLongBreak === null
+        ? 0
+        : completedFocusCount + 1;
     const isLongBreak =
       preset.focusCountBeforeLongBreak !== null &&
       nextCompletedFocusCount === preset.focusCountBeforeLongBreak;
@@ -767,6 +820,7 @@ export const TimerPanel = ({
     setRemainingAtRunStartMilliseconds(focusDurationMilliseconds);
     setCurrentTimeMs(Date.now());
     setCompletedFocusCount(0);
+    setCompletedFocusCountPresetId(presetId);
     setAccumulatedFocusMilliseconds(0);
     setSessionStartedAtMs(null);
     setSessionClientUuid(null);
@@ -864,7 +918,7 @@ export const TimerPanel = ({
           started_at: new Date(sessionStartedAtMs).toISOString(),
           ended_at: new Date(pendingStudyEnd.endedAtMs).toISOString(),
           study_seconds: pendingStudyEnd.studySeconds,
-          goal: goal.trim(),
+          goal: normalizeGoal(goal),
         },
         {
           onRequestStarted: () => {
@@ -874,7 +928,7 @@ export const TimerPanel = ({
         },
       );
       const savedStudySeconds = pendingStudyEnd.studySeconds;
-      if (studyRecord.study_date === todayStudyDate) {
+      if (studyRecord.study_date === studySummaryDate) {
         setSavedDuringMountStudySeconds(
           (currentStudySeconds) => currentStudySeconds + savedStudySeconds,
         );
@@ -950,6 +1004,10 @@ export const TimerPanel = ({
       pendingRecoverySnapshot.accumulatedFocusMilliseconds,
     );
     setCompletedFocusCount(pendingRecoverySnapshot.completedFocusCount);
+    setCompletedFocusCountPresetId(
+      pendingRecoverySnapshot.completedFocusCountPresetId ??
+        pendingRecoverySnapshot.presetId,
+    );
     setSessionStartedAtMs(pendingRecoverySnapshot.sessionStartedAtMs);
     setSessionClientUuid(pendingRecoverySnapshot.clientUuid);
     setGoal(pendingRecoverySnapshot.goal);
@@ -972,7 +1030,7 @@ export const TimerPanel = ({
   };
 
   const handleHistoryRecordDeleted = (studyRecord: StudyHistoryRecord) => {
-    if (studyRecord.study_date !== todayStudyDate) return;
+    if (studyRecord.study_date !== studySummaryDate) return;
     setDeletedDuringMountTodayStudySeconds(
       (currentSeconds) => currentSeconds + studyRecord.study_seconds,
     );
@@ -982,6 +1040,11 @@ export const TimerPanel = ({
     setSessionCompletion(null);
     setGoal("");
     if (onCreateStudyRecord !== undefined) setIsGoalSetupVisible(true);
+  };
+
+  const proceedToTimer = () => {
+    setGoal((currentGoal) => normalizeGoal(currentGoal));
+    setIsGoalSetupVisible(false);
   };
 
   const skipBreakAndStartFocus = () => {
@@ -1007,7 +1070,6 @@ export const TimerPanel = ({
     const nextFocusDurationMilliseconds = nextPreset.focusSeconds * 1000;
 
     setPresetId(nextPresetId);
-    setCompletedFocusCount(0);
     setPhaseRemainingMilliseconds(nextFocusDurationMilliseconds);
     setPhaseDurationMilliseconds(nextFocusDurationMilliseconds);
     setRemainingAtRunStartMilliseconds(nextFocusDurationMilliseconds);
@@ -1248,7 +1310,7 @@ export const TimerPanel = ({
         <button
           className="primary-button"
           type="button"
-          onClick={() => setIsGoalSetupVisible(false)}
+          onClick={proceedToTimer}
         >
           タイマーへ進む
         </button>

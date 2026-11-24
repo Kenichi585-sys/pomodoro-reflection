@@ -882,44 +882,6 @@
   opacity: 0.45;
 }
 
-.deep-dive-list {
-  display: grid;
-  gap: 16px;
-}
-
-.deep-dive-field {
-  display: grid;
-  gap: 10px;
-  padding-left: clamp(16px, 4vw, 40px);
-  border-left: 2px solid #343434;
-}
-
-.deep-dive-field .text-button {
-  min-height: auto;
-  justify-self: start;
-  padding: 4px 0;
-}
-
-.add-deep-dive-button {
-  justify-self: start;
-  margin-top: 6px;
-}
-
-.reflection-score-section {
-  display: grid;
-  gap: 10px;
-  margin: 34px 0 0;
-  padding: 28px;
-  border: 1px solid #363636;
-  border-radius: 18px;
-}
-
-.reflection-score-section legend {
-  padding: 0 10px;
-  font-size: 1.15rem;
-  font-weight: 750;
-}
-
 .reflection-actions {
   display: flex;
   justify-content: flex-end;
@@ -1006,57 +968,9 @@
   line-height: 1.75;
 }
 
-.reflection-detail-deep-dives {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-  padding-left: 24px;
-  line-height: 1.7;
-}
-
-.reflection-score-list {
-  display: grid;
-  gap: 14px;
-  margin: 0;
-}
-
-.reflection-score-list + .reflection-score-list {
-  margin-top: 14px;
-  padding-top: 14px;
-  border-top: 1px solid #343434;
-}
-
-.reflection-score-list div {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: start;
-  gap: 16px;
-}
-
-.reflection-score-list dt {
-  line-height: 1.55;
-}
-
-.reflection-score-list dd {
-  margin: 0;
-  color: #a8dfee;
-  font-weight: 750;
-  white-space: nowrap;
-}
-
-.reflection-outcome-evidence {
-  margin-top: 16px !important;
-  padding-top: 16px;
-  border-top: 1px solid #343434;
-}
-
 @media (max-width: 620px) {
   .reflection-card {
     padding: 26px 20px;
-  }
-
-  .reflection-score-section {
-    padding: 22px 16px;
   }
 
   .reflection-actions {
@@ -1101,10 +1015,6 @@
     gap: 4px;
   }
 
-  .reflection-score-list div {
-    grid-template-columns: 1fr;
-    gap: 6px;
-  }
 }
 
 @media (max-height: 800px) {
